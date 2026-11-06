@@ -3,7 +3,9 @@
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { post } from '#lib/api.ts';
 	import { countdown, due } from '#lib/time.ts';
-	import type { EnvelopeClaim, PocketClaim, Series } from '#lib/types.ts';
+	import type { EnvelopeClaim, PocketClaim } from '#lib/types.ts';
+	import { ticketsText } from '#lib/prize.ts';
+	import QuestsCard from '#lib/components/QuestsCard.svelte';
 	import { getSession } from '#lib/session.svelte.ts';
 	import { getFx } from '#lib/fx/fx.svelte.ts';
 	import { SERIES_LOOK } from '#lib/series.ts';
@@ -56,6 +58,7 @@
 			const r = await post<PocketClaim>('/pocket/claim');
 			session.add(r.tickets);
 			session.me.pocket = r.pocket;
+			session.apply(r.progress);
 			flash('pocket', [i18n.t('lobby.got_tickets', { n: r.tickets.length })]);
 		} catch (e) {
 			error = i18n.error(e);
@@ -70,8 +73,8 @@
 		error = '';
 		try {
 			const r = await post<EnvelopeClaim>('/envelope/claim');
-			session.me.coins = r.coins;
 			session.add(r.tickets);
+			session.apply(r.progress);
 			const parts = [];
 			if (r.contents.coins) parts.push(i18n.t('lobby.got_coins', { n: r.contents.coins }));
 			if (r.tickets.length) parts.push(i18n.t('lobby.got_tickets', { n: r.tickets.length }));
@@ -95,12 +98,6 @@
 	const stack = $derived(me.tickets.slice(0, 3));
 	const env = $derived(me.envelope);
 
-	/** "2 Lucky Three + 1 Golden Ticket" */
-	function ticketList(series: Series[]) {
-		const counts = new Map<Series, number>();
-		for (const s of series) counts.set(s, (counts.get(s) ?? 0) + 1);
-		return [...counts].map(([s, n]) => `${n} × ${i18n.t(`series.${s}`)}`).join(' + ');
-	}
 	/** Days of this week's cycle already opened, and the one waiting today */
 	const week = $derived(
 		env.available
@@ -202,7 +199,7 @@
 				{i18n.t('lobby.envelope_holds')}:
 				{[
 					env.contents.coins ? i18n.t('contents.coins', { n: env.contents.coins }) : '',
-					ticketList(env.contents.tickets)
+					ticketsText(i18n, env.contents.tickets)
 				]
 					.filter(Boolean)
 					.join(' + ')}
@@ -218,6 +215,8 @@
 					>{/key}{/if}
 		</article>
 	</section>
+
+	<QuestsCard />
 
 	<footer class="foot">
 		<span>{me.username}</span>

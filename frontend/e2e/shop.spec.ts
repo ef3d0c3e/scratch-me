@@ -1,8 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { newPlayer, setCoins, visit } from './helpers';
+import { newPlayer, setCoins, setXp, visit } from './helpers';
+
+test('the better tickets wait for a level', async ({ page }) => {
+	await newPlayer(page);
+	await visit(page, '/shop');
+	await expect(page.locator('li[data-series="cash_wheel"]')).toContainText('Level 5');
+	await expect(page.getByRole('button', { name: 'Buy Cash Wheel' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Buy Lucky Three' })).toBeEnabled();
+});
 
 test('buying a ticket puts it in the stack, ready to scratch', async ({ page }) => {
-	await newPlayer(page);
+	const name = await newPlayer(page);
+	await setXp(name, 1000);
+	await visit(page, '/');
 	await page.getByRole('link', { name: /Shop/ }).click();
 	await page.getByRole('button', { name: 'Buy Cash Wheel' }).click();
 	await expect(page.getByTestId('coins')).toHaveText('100');

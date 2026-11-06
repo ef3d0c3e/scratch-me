@@ -6,12 +6,25 @@
 
 import { getContext, setContext } from 'svelte';
 import { api } from './api.ts';
-import type { Cosmetic, MeDto, Scratched, TicketDto } from './types.ts';
+import type { Cosmetic, MeDto, Prize, Progress, Scratched, TicketDto } from './types.ts';
+
+/** Something to tell the player, shown a few seconds */
+export interface News {
+	id: number;
+	kind: 'level' | 'quest' | 'bonus' | 'achievement';
+	what: string;
+	reward: Prize;
+}
 
 export class Session {
 	me = $state() as MeDto;
 	/** The ticket on screen, if any */
 	open = $state<TicketDto | null>(null);
+	/** Level ups, quests and achievements waiting to be shown */
+	news = $state<News[]>([]);
+	/** Moves on each time progress lands: pages showing quests refetch them */
+	progressed = $state(0);
+	private newsId = 0;
 
 	constructor(me: MeDto) {
 		this.me = me;
@@ -31,11 +44,29 @@ export class Session {
 		return this.me.owned.some((o) => o.kind === item.kind && o.id === item.id);
 	}
 
+	/** What an action's progress gave: balance, level, reward tickets, and the news */
+	apply(p: Progress) {
+		this.me.coins = p.coins;
+		this.me.level = p.level;
+		this.add(p.tickets);
+		const push = (kind: News['kind'], what: string, reward: Prize) =>
+			this.news.push({ id: ++this.newsId, kind, what, reward });
+		for (const l of p.level_ups) push('level', l.what, l.reward);
+		for (const q of p.quests) push('quest', q.what, q.reward);
+		if (p.bonus) push('bonus', '', p.bonus);
+		for (const a of p.achievements) push('achievement', a.what, a.reward);
+		this.progressed++;
+	}
+
+	dismiss(id: number) {
+		this.news = this.news.filter((n) => n.id !== id);
+	}
+
 	/** A ticket was scratched: it leaves the stack, its prize lands */
 	spent(r: Scratched) {
-		this.me.coins = r.coins;
 		this.me.tickets = this.me.tickets.filter((t) => t.id !== r.id);
 		this.add(r.tickets);
+		this.apply(r.progress);
 		if (r.prize.kind === 'cosmetic' && !r.duplicate)
 			this.me.owned = [...this.me.owned, r.prize.item];
 		if (r.prize.kind === 'pocket_refill') void this.refresh().catch(() => {});

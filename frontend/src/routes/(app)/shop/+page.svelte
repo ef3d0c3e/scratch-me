@@ -49,7 +49,7 @@
 	const buyTicket = (series: TicketDto['series']) =>
 		run(series, async () => {
 			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series });
-			session.me.coins = r.coins;
+			session.apply(r.progress);
 			if (r.ticket) {
 				session.add([r.ticket]);
 				bought = r.ticket;
@@ -59,8 +59,8 @@
 	const buyCosmetic = (item: Cosmetic) =>
 		run(keyOf(item), async () => {
 			const r = await post<Bought>('/shop/buy', { kind: 'cosmetic', item });
-			session.me.coins = r.coins;
 			session.me.owned = [...session.me.owned, item];
+			session.apply(r.progress);
 			bought = null;
 			notice = i18n.t('shop.got', { name: i18n.t(cosmeticKey(item)) });
 		});
@@ -114,14 +114,18 @@
 						<h3>{i18n.t(`series.${offer.series}`)}</h3>
 						<p>{i18n.t(`series.${offer.series}.rules`)}</p>
 					</div>
-					<button
-						type="button"
-						class="btn small primary"
-						disabled={busy !== null || session.me.coins < offer.price}
-						onclick={() => buyTicket(offer.series)}
-						aria-label="{i18n.t('shop.buy')} {i18n.t(`series.${offer.series}`)}"
-						>🪙 {i18n.num(offer.price)}</button
-					>
+					{#if session.me.level.level < offer.level}
+						<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
+					{:else}
+						<button
+							type="button"
+							class="btn small primary"
+							disabled={busy !== null || session.me.coins < offer.price}
+							onclick={() => buyTicket(offer.series)}
+							aria-label="{i18n.t('shop.buy')} {i18n.t(`series.${offer.series}`)}"
+							>🪙 {i18n.num(offer.price)}</button
+						>
+					{/if}
 				</li>
 			{/each}
 		</ul>

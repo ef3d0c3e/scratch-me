@@ -6,8 +6,12 @@ export async function visit(page: Page, path: string) {
 	await page.locator('html[data-hydrated]').waitFor();
 }
 
-/** Signs a new player up through the form and lands on the lobby */
-export async function newPlayer(page: Page) {
+/**
+ * Signs a new player up through the form and lands on the lobby. Unless
+ * `fresh`, their quests and achievements stay out of the way (no quest
+ * today, every achievement earned), so tests can count coins.
+ */
+export async function newPlayer(page: Page, { fresh = false } = {}) {
 	const name = `p${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 	await visit(page, '/register');
 	await page.getByLabel('Username').fill(name);
@@ -16,7 +20,46 @@ export async function newPlayer(page: Page) {
 	await page.getByRole('button', { name: 'Start scratching' }).click();
 	await page.waitForURL('/');
 	await page.locator('html[data-hydrated]').waitFor();
+	if (!fresh) {
+		await quiet(page, name);
+		await visit(page, '/');
+	}
 	return name;
+}
+
+async function quiet(page: Page, name: string) {
+	const ids: { id: string }[] = await (await page.request.get('/api/achievements')).json();
+	// The lobby has drawn today's quests already: a placeholder replaces them
+	await sql('DELETE FROM quests WHERE user_id = (SELECT id FROM users WHERE username = $1)', [
+		name
+	]);
+	await sql(
+		`INSERT INTO quests (user_id, day, key)
+		 SELECT id, (now() AT TIME ZONE tz)::date, 'none' FROM users WHERE username = $1`,
+		[name]
+	);
+	await sql(
+		`INSERT INTO achievements (user_id, id)
+		 SELECT u.id, a FROM users u, unnest($2::text[]) a WHERE u.username = $1 ON CONFLICT DO NOTHING`,
+		[name, ids.map((a) => a.id)]
+	);
+}
+
+export async function setXp(username: string, xp: number) {
+	await sql('UPDATE users SET xp = $2 WHERE username = $1', [username, xp]);
+}
+
+/** Sets today's quests to these keys, with this much progress */
+export async function setQuests(username: string, quests: [string, number][]) {
+	await sql('DELETE FROM quests WHERE user_id = (SELECT id FROM users WHERE username = $1)', [
+		username
+	]);
+	for (const [key, progress] of quests)
+		await sql(
+			`INSERT INTO quests (user_id, day, key, progress)
+			 SELECT id, (now() AT TIME ZONE tz)::date, $2, $3 FROM users WHERE username = $1`,
+			[username, key, progress]
+		);
 }
 
 /** Drags across the foil row by row, like a finger, from `from` to `to` of its height */

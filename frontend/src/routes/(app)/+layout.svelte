@@ -5,6 +5,8 @@
 	import { setSession } from '#lib/session.svelte.ts';
 	import { setCookie } from '#lib/theme.ts';
 	import Counter from '#lib/components/Counter.svelte';
+	import LevelBadge from '#lib/components/LevelBadge.svelte';
+	import NewsToasts from '#lib/components/NewsToasts.svelte';
 	import ScratchSheet from '#lib/components/ScratchSheet.svelte';
 	import Symbol from '#lib/components/Symbol.svelte';
 
@@ -22,7 +24,8 @@
 
 	const tabs = [
 		{ href: '/', key: 'nav.lobby', icon: '🎟️' },
-		{ href: '/shop', key: 'nav.shop', icon: '🛍️' }
+		{ href: '/shop', key: 'nav.shop', icon: '🛍️' },
+		{ href: '/trophies', key: 'nav.trophies', icon: '🏆' }
 	] as const;
 	const left = $derived(
 		session.open ? session.me.tickets.filter((t) => t.id !== session.open?.id).length : 0
@@ -32,9 +35,12 @@
 <div class="app">
 	<header class="top">
 		<a class="logo" href="/">Scratch<span>-me</span></a>
-		<div class="wallet" aria-label={i18n.t('lobby.coins')}>
-			<span class="coin" aria-hidden="true"><Symbol symbol="coin" label="" /></span>
-			<Counter value={session.me.coins} duration={900} testid="coins" />
+		<div class="right">
+			<LevelBadge level={session.me.level} />
+			<div class="wallet" aria-label={i18n.t('lobby.coins')}>
+				<span class="coin" aria-hidden="true"><Symbol symbol="coin" label="" /></span>
+				<Counter value={session.me.coins} duration={900} testid="coins" />
+			</div>
 		</div>
 	</header>
 
@@ -53,6 +59,8 @@
 		{/each}
 	</nav>
 </div>
+
+<NewsToasts />
 
 {#if session.open}
 	{#key session.open.id}
@@ -98,6 +106,11 @@
 		color: var(--pink);
 		text-shadow: 0 2px 0 var(--pink-shadow);
 	}
+	.right {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
 	.wallet {
 		display: flex;
 		align-items: center;
@@ -128,7 +141,8 @@
 		border-top: 1px solid var(--line);
 	}
 	.tabs a {
-		flex: 0 1 200px;
+		flex: 1 1 0;
+		max-width: 160px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
