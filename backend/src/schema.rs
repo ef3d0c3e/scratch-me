@@ -36,9 +36,40 @@ diesel::table! {
 }
 
 diesel::table! {
+    duels (id) {
+        id -> Int8,
+        challenger_id -> Int8,
+        opponent_id -> Int8,
+        stake -> Int8,
+        status -> Text,
+        created_at -> Timestamptz,
+        decided_at -> Nullable<Timestamptz>,
+        winner_id -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     mutes (user_id, muted_id) {
         user_id -> Int8,
         muted_id -> Int8,
+    }
+}
+
+diesel::table! {
+    pot_entries (id) {
+        id -> Int8,
+        day -> Date,
+        user_id -> Int8,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    pots (day) {
+        day -> Date,
+        amount -> Int8,
+        winner_id -> Nullable<Int8>,
+        drawn_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -112,6 +143,8 @@ diesel::table! {
         created_at -> Timestamptz,
         scratched_at -> Nullable<Timestamptz>,
         picks -> Nullable<Jsonb>,
+        from_user_id -> Nullable<Int8>,
+        from_name -> Nullable<Text>,
     }
 }
 
@@ -141,6 +174,7 @@ diesel::joinable!(cosmetics -> users (user_id));
 diesel::joinable!(quest_days -> users (user_id));
 diesel::joinable!(quests -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
+diesel::joinable!(pot_entries -> users (user_id));
 diesel::joinable!(shouts -> users (user_id));
 diesel::joinable!(stats -> users (user_id));
 diesel::joinable!(streaks -> users (user_id));
@@ -151,7 +185,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     announcements,
     aquarium,
     cosmetics,
+    duels,
     mutes,
+    pot_entries,
+    pots,
     quest_days,
     quests,
     sessions,

@@ -17,6 +17,25 @@
 	// svelte-ignore state_referenced_locally
 	const session = setSession(data.me);
 	const live = setLive();
+	// Gifts, duels and the pot: a toast, and the stack or balance they changed
+	live.onnotice = (n) => {
+		const me = session.me.username;
+		if (n.type === 'gift') {
+			session.tell('gift', i18n.t('news.gift', { name: n.from }), {
+				kind: 'ticket',
+				series: n.series
+			});
+		} else if (n.type === 'duel') {
+			session.tell('duel', i18n.t(`news.duel.${n.status}`, { name: n.from }));
+		} else {
+			session.tell(
+				'pot',
+				n.user === me ? i18n.t('news.pot_mine') : i18n.t('news.pot', { name: n.user }),
+				{ kind: 'coins', amount: n.amount }
+			);
+		}
+		if (n.type !== 'pot' || n.user === me) void session.refresh().catch(() => {});
+	};
 	onMount(() => {
 		live.start();
 		return () => live.stop();

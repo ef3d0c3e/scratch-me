@@ -29,6 +29,10 @@
 				return i18n.t('news.bonus');
 			case 'achievement':
 				return i18n.t('news.achievement');
+			case 'gift':
+			case 'duel':
+			case 'pot':
+				return n.what;
 		}
 	}
 
@@ -39,6 +43,15 @@
 			return i18n.has(`achievement.${n.what}`) ? i18n.t(`achievement.${n.what}` as never) : n.what;
 		return '';
 	}
+	const ICONS = {
+		level: '⭐',
+		quest: '✅',
+		bonus: '🎁',
+		achievement: '🏆',
+		gift: '🎁',
+		duel: '⚔️',
+		pot: '🍯'
+	};
 </script>
 
 <div class="news" aria-live="polite">
@@ -50,9 +63,7 @@
 				onclick={() => session.dismiss(shown.id)}
 				data-kind={shown.kind}
 			>
-				<span class="icon" aria-hidden="true"
-					>{{ level: '⭐', quest: '✅', bonus: '🎁', achievement: '🏆' }[shown.kind]}</span
-				>
+				<span class="icon" aria-hidden="true">{ICONS[shown.kind]}</span>
 				<span class="text">
 					<b>{title(shown)}</b>
 					{#if what(shown)}<span>{what(shown)}</span>{/if}

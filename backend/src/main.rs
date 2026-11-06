@@ -36,6 +36,17 @@ async fn main() -> anyhow::Result<()> {
         Default::default()
     };
     let state = web::Data::new(AppState { pool, live: Default::default(), limits, config: Arc::new(config) });
+    // Pots to draw and duels to expire, once a minute
+    let chores = state.clone();
+    actix_web::rt::spawn(async move {
+        let mut every = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            every.tick().await;
+            if let Err(e) = scratchme_api::chores(&chores).await {
+                tracing::error!("chores: {e:#}");
+            }
+        }
+    });
     tracing::info!("listening on http://{bind}");
     HttpServer::new(move || {
         App::new()

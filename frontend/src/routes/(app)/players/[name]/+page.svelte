@@ -8,6 +8,7 @@
 	import { SKIN_SWATCH } from '#lib/series.ts';
 	import { achievementName } from '#lib/prize.ts';
 	import LevelBadge from '#lib/components/LevelBadge.svelte';
+	import type { Bought, DuelDto, Series, ShopDto } from '#lib/types.ts';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
@@ -18,6 +19,49 @@
 	const earnedMine = $derived(data.mine.filter((a) => a.earned_at));
 	let error = $state('');
 	let busy = $state(false);
+	let done = $state('');
+	const STAKE = 100;
+
+	/** What can be sent: the shop's tickets the sender's level opens */
+	let offers = $state<ShopDto['tickets']>([]);
+	let gift = $state<Series | ''>('');
+	let giving = $state(false);
+	async function openGift() {
+		giving = true;
+		const shop = await api<ShopDto>('/shop').catch(() => null);
+		offers = shop?.tickets.filter((t) => t.level <= session.me.level.level) ?? [];
+		gift = offers[0]?.series ?? '';
+	}
+	const giftPrice = $derived(offers.find((o) => o.series === gift)?.price ?? 0);
+
+	async function act(f: () => Promise<string>) {
+		busy = true;
+		error = '';
+		done = '';
+		try {
+			done = await f();
+		} catch (err) {
+			error = i18n.error(err);
+		} finally {
+			busy = false;
+		}
+	}
+	const sendGift = () =>
+		act(async () => {
+			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series: gift, to: p.username });
+			session.apply(r.progress);
+			giving = false;
+			return i18n.t('profile.gift_sent', {
+				series: i18n.t(`series.${gift as Series}`),
+				name: r.gift_to ?? p.username
+			});
+		});
+	const challenge = () =>
+		act(async () => {
+			await post<DuelDto>('/duels', { opponent: p.username });
+			await session.refresh();
+			return i18n.t('profile.challenged', { name: p.username });
+		});
 
 	async function setTitle(e: Event) {
 		const value = (e.currentTarget as HTMLSelectElement).value || null;
@@ -101,10 +145,39 @@
 			</select>
 		</label>
 	{:else}
-		<button type="button" class="btn ghost small" disabled={busy} onclick={toggleMute}
-			>{p.muted ? i18n.t('profile.unmute') : i18n.t('profile.mute')}</button
-		>
+		<div class="acts">
+			{#if giving}
+				<label class="pick">
+					{i18n.t('profile.gift_pick')}
+					<select bind:value={gift} disabled={busy}>
+						{#each offers as o (o.series)}
+							<option value={o.series}>{i18n.t(`series.${o.series}`)} · 🪙 {o.price}</option>
+						{/each}
+					</select>
+				</label>
+				<button
+					type="button"
+					class="btn primary small"
+					disabled={busy || !gift || session.me.coins < giftPrice}
+					onclick={sendGift}>{i18n.t('profile.gift_send', { n: giftPrice })}</button
+				>
+			{:else}
+				<button type="button" class="btn small" disabled={busy} onclick={openGift}
+					>🎁 {i18n.t('profile.gift')}</button
+				>
+			{/if}
+			<button
+				type="button"
+				class="btn small"
+				disabled={busy || session.me.coins < STAKE}
+				onclick={challenge}>⚔️ {i18n.t('profile.challenge', { n: STAKE })}</button
+			>
+			<button type="button" class="btn ghost small" disabled={busy} onclick={toggleMute}
+				>{p.muted ? i18n.t('profile.unmute') : i18n.t('profile.mute')}</button
+			>
+		</div>
 	{/if}
+	{#if done}<p class="done" role="status">{done}</p>{/if}
 	{#if error}<p class="err" role="alert">{error}</p>{/if}
 
 	<section>
@@ -120,6 +193,15 @@
 </div>
 
 <style>
+	.acts {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.done {
+		color: #34e0a1;
+		font-weight: 700;
+	}
 	.profile {
 		display: flex;
 		flex-direction: column;

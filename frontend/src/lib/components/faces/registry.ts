@@ -26,6 +26,8 @@ import NumberFace from './NumberFace.svelte';
 import PlinkoFace from './PlinkoFace.svelte';
 import PumpkinFace from './PumpkinFace.svelte';
 import SnowballFace from './SnowballFace.svelte';
+import PotFace from './PotFace.svelte';
+import DuelFace from './DuelFace.svelte';
 import PushLuckFace from './PushLuckFace.svelte';
 import ReelsFace from './ReelsFace.svelte';
 import RocketFace from './RocketFace.svelte';
@@ -59,7 +61,9 @@ export const SCRATCH_FACES: Partial<Record<Series, Face>> = {
 	word_bank: WordBankFace,
 	word_search: WordSearchFace,
 	pumpkin_patch: PumpkinFace,
-	snowball: SnowballFace
+	snowball: SnowballFace,
+	pot_ticket: PotFace,
+	duel: DuelFace
 };
 
 export const PLAYED_FACES: Partial<Record<Series, Face>> = {

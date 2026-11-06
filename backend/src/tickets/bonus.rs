@@ -28,7 +28,8 @@ const BONUSES: [(Option<Bonus>, u32); 5] = [
 /// Tickets revealed at once carry bonus boxes; those played move by move,
 /// the always-winning and the ones made of tickets do not
 pub fn eligible(series: Series) -> bool {
-    !matches!(series, Series::Golden | Series::TicketChain | Series::TreasureDig) && !series.is_played()
+    !matches!(series, Series::Golden | Series::TicketChain | Series::TreasureDig | Series::PotTicket | Series::Duel)
+        && !series.is_played()
 }
 
 /// What a bonus does to a prize

@@ -60,6 +60,35 @@ pub enum Event {
     Unannounced {
         id: i64,
     },
+    /// To one player: a ticket sent to them
+    Gift {
+        from: String,
+        series: Series,
+    },
+    /// To one player: a duel challenge, or what became of theirs
+    Duel {
+        id: i64,
+        from: String,
+        status: String,
+    },
+    /// To everyone: a day's pot was won
+    Pot {
+        user: String,
+        amount: i64,
+    },
+}
+
+/// One event on its way: to one player, or to everyone
+#[derive(Debug)]
+pub struct Envelope {
+    pub to: Option<i64>,
+    pub json: String,
+}
+
+impl Envelope {
+    pub fn is_for(&self, uid: i64) -> bool {
+        self.to.is_none_or(|to| to == uid)
+    }
 }
 
 /// A win worth telling everyone about
@@ -80,7 +109,7 @@ pub enum FeedItem {
 }
 
 pub struct Hub {
-    tx: broadcast::Sender<Arc<str>>,
+    tx: broadcast::Sender<Arc<Envelope>>,
     feed: Mutex<VecDeque<FeedItem>>,
     /// Open sockets per user
     online: Mutex<HashMap<i64, usize>>,
@@ -94,14 +123,27 @@ impl Default for Hub {
 }
 
 impl Hub {
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<str>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Arc<Envelope>> {
         self.tx.subscribe()
     }
 
-    fn send(&self, event: &Event) {
+    fn send_to(&self, to: Option<i64>, event: &Event) {
         // No connected client is fine: the event is simply dropped
         let json = serde_json::to_string(event).expect("events serialize");
-        let _ = self.tx.send(json.into());
+        let _ = self.tx.send(Arc::new(Envelope { to, json }));
+    }
+
+    fn send(&self, event: &Event) {
+        self.send_to(None, event);
+    }
+
+    /// An event for one player only
+    pub fn notify(&self, uid: i64, event: Event) {
+        self.send_to(Some(uid), &event);
+    }
+
+    pub fn pot(&self, user: &str, amount: i64) {
+        self.send(&Event::Pot { user: user.to_owned(), amount });
     }
 
     fn remember(&self, item: FeedItem) {
@@ -202,9 +244,20 @@ mod tests {
         let feed = hub.feed();
         assert_eq!(feed.len(), RECENT);
         assert!(matches!(&feed[0], FeedItem::Feat(f) if f.user == "u39"));
-        let first: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+        let first: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap().json).unwrap();
         assert_eq!(first["type"], "feat");
         assert_eq!(first["id"], "first_win");
+    }
+
+    #[test]
+    fn notes_reach_their_player_only() {
+        let hub = Hub::default();
+        let mut rx = hub.subscribe();
+        hub.notify(7, Event::Gift { from: "ana".into(), series: Series::LuckyThree });
+        let env = rx.try_recv().unwrap();
+        assert!(env.is_for(7) && !env.is_for(8));
+        hub.pot("bob", 500);
+        assert!(rx.try_recv().unwrap().is_for(8), "the pot is news for all");
     }
 
     #[test]

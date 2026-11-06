@@ -28,7 +28,9 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	word_bank: { edge: '#84cc16', ink: '#4d7c0f', shadow: '#1a2e05' },
 	word_search: { edge: '#ec4899', ink: '#be185d', shadow: '#500724' },
 	pumpkin_patch: { edge: '#f97316', ink: '#9a3412', shadow: '#431407' },
-	snowball: { edge: '#7dd3fc', ink: '#0369a1', shadow: '#082f49' }
+	snowball: { edge: '#7dd3fc', ink: '#0369a1', shadow: '#082f49' },
+	pot_ticket: { edge: '#facc15', ink: '#a16207', shadow: '#422006' },
+	duel: { edge: '#e11d48', ink: '#9f1239', shadow: '#4c0519' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -60,7 +62,10 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	word_bank: { cols: 6, rows: 2 },
 	word_search: { cols: 4, rows: 4 },
 	pumpkin_patch: { cols: 3, rows: 3 },
-	snowball: { cols: 5, rows: 1 }
+	snowball: { cols: 5, rows: 1 },
+	pot_ticket: { cols: 1, rows: 1 },
+	/** Both rows of dice */
+	duel: { cols: 3, rows: 2 }
 };
 
 /** Series played move by move, not scratched all at once */

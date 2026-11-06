@@ -6,13 +6,14 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
+use super::pot;
 use super::tickets::{TicketDto, issue};
 use crate::AppState;
 use crate::auth::CurrentUser;
 use crate::cosmetics::{Cosmetic, Origin};
 use crate::error::{ApiError, ApiResult};
 use crate::progress::{self, Event, Progress, levels};
-use crate::schema::{cosmetics, users};
+use crate::schema::{cosmetics, tickets, users};
 use crate::tickets::{Series, Source};
 
 #[derive(Debug, Serialize)]
@@ -56,8 +57,15 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Buy {
-    Ticket { series: Series },
-    Cosmetic { item: Cosmetic },
+    Ticket {
+        series: Series,
+        /// A gift: the player it is for
+        #[serde(default)]
+        to: Option<String>,
+    },
+    Cosmetic {
+        item: Cosmetic,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +73,8 @@ pub struct Bought {
     pub coins: i64,
     pub ticket: Option<TicketDto>,
     pub item: Option<Cosmetic>,
+    /// A gift went to this player
+    pub gift_to: Option<String>,
     pub progress: Progress,
 }
 
@@ -72,7 +82,7 @@ pub struct Bought {
 pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<Buy>) -> ApiResult<web::Json<Bought>> {
     let buy = body.into_inner();
     let price = match &buy {
-        Buy::Ticket { series } => series.price(),
+        Buy::Ticket { series, .. } => series.price(),
         Buy::Cosmetic { item } => item.price(),
     }
     .ok_or(ApiError::Invalid("not_for_sale"))?;
@@ -80,7 +90,7 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
     let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {
-            if let Buy::Ticket { series } = &buy {
+            if let Buy::Ticket { series, .. } = &buy {
                 if !series.in_season(Utc::now().date_naive()) {
                     return Err(ApiError::Conflict("out_of_season"));
                 }
@@ -98,10 +108,38 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                 .optional()?;
             coins.ok_or(ApiError::Conflict("not_enough_coins"))?;
             match buy {
-                Buy::Ticket { series } => {
+                Buy::Ticket { series, to: Some(to) } => {
+                    // A gift: drawn for the other player, marked with the sender
+                    let (rid, rname): (i64, String) = users::table
+                        .filter(lower(users::username).eq(to.to_lowercase()))
+                        .select((users::id, users::username))
+                        .first(conn)
+                        .await
+                        .optional()?
+                        .ok_or(ApiError::NotFound("player"))?;
+                    if rid == user.id {
+                        return Err(ApiError::Invalid("gift_to_self"));
+                    }
+                    let mut ticket = issue(conn, rid, series, Source::Gift, 1).await?.pop().expect("one ticket");
+                    diesel::update(tickets::table.find(ticket.id))
+                        .set((tickets::from_user_id.eq(user.id), tickets::from_name.eq(&user.username)))
+                        .execute(conn)
+                        .await?;
+                    ticket.from = Some(user.username.clone());
+                    if series == Series::PotTicket {
+                        pot::enter(conn, rid).await?;
+                    }
+                    let progress = progress::apply(conn, user.id, &[Event::Bought(series), Event::Gifted]).await?;
+                    Ok(Bought { coins: progress.coins, ticket: None, item: None, gift_to: Some(rname), progress }
+                        .with_gift(rid, ticket))
+                }
+                Buy::Ticket { series, to: None } => {
                     let ticket = issue(conn, user.id, series, Source::Shop, 1).await?.pop();
+                    if series == Series::PotTicket {
+                        pot::enter(conn, user.id).await?;
+                    }
                     let progress = progress::apply(conn, user.id, &[Event::Bought(series)]).await?;
-                    Ok(Bought { coins: progress.coins, ticket, item: None, progress })
+                    Ok((Bought { coins: progress.coins, ticket, item: None, gift_to: None, progress }, None))
                 }
                 Buy::Cosmetic { item } => {
                     let added = diesel::insert_into(cosmetics::table)
@@ -119,14 +157,31 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                     }
                     // Owning more may earn the collector achievement
                     let progress = progress::apply(conn, user.id, &[]).await?;
-                    Ok(Bought { coins: progress.coins, ticket: None, item: Some(item), progress })
+                    Ok((
+                        Bought { coins: progress.coins, ticket: None, item: Some(item), gift_to: None, progress },
+                        None,
+                    ))
                 }
             }
         })
         .await?;
+    let (out, gift) = out;
     crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
+    // Committed: the receiver hears of it
+    if let Some((rid, ticket)) = gift {
+        let series = Series::parse(&ticket.series).expect("a series");
+        state.live.notify(rid, crate::live::Event::Gift { from: name.clone(), series });
+    }
     Ok(web::Json(out))
 }
+
+impl Bought {
+    fn with_gift(self, rid: i64, ticket: TicketDto) -> (Bought, Option<(i64, TicketDto)>) {
+        (self, Some((rid, ticket)))
+    }
+}
+
+diesel::define_sql_function!(fn lower(x: diesel::sql_types::Text) -> diesel::sql_types::Text);
 
 #[derive(Debug, Deserialize)]
 pub struct Equip {

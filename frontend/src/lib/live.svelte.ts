@@ -6,14 +6,21 @@
 
 import { getContext, setContext } from 'svelte';
 import { api } from './api.ts';
-import type { AnnouncementDto, ChatEvent, FeedItem } from './types.ts';
+import type { AnnouncementDto, ChatEvent, DuelStatus, FeedItem, Series } from './types.ts';
 
 type LiveMessage =
 	| { type: 'hello'; messages: ChatEvent[]; feed: FeedItem[]; announcements: AnnouncementDto[] }
 	| ({ type: 'chat' } & ChatEvent)
 	| FeedItem
 	| ({ type: 'announcement' } & AnnouncementDto)
-	| { type: 'unannounced'; id: number };
+	| { type: 'unannounced'; id: number }
+	| Notice;
+
+/** Events for one player (or, for the pot, news everyone hears) */
+export type Notice =
+	| { type: 'gift'; from: string; series: Series }
+	| { type: 'duel'; id: number; from: string; status: DuelStatus }
+	| { type: 'pot'; user: string; amount: number };
 
 export const MAX_MESSAGES = 100;
 export const MAX_FEED = 30;
@@ -29,6 +36,10 @@ export class Live {
 	chatOpen = $state(false);
 	/** Players muted: their shouts are left out */
 	muted = $state<Set<string>>(new Set());
+	/** Moves on with each duel or pot news: cards showing them refetch */
+	social = $state(0);
+	/** Told of gifts, duels and pots */
+	onnotice: ((n: Notice) => void) | null = null;
 
 	#ws: WebSocket | null = null;
 	#retry = 1000;
@@ -123,6 +134,12 @@ export class Live {
 			}
 			case 'unannounced':
 				this.announcements = this.announcements.filter((x) => x.id !== m.id);
+				break;
+			case 'gift':
+			case 'duel':
+			case 'pot':
+				this.social++;
+				this.onnotice?.(m);
 				break;
 		}
 	}

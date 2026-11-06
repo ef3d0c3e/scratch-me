@@ -6,6 +6,8 @@
 	import type { EnvelopeClaim, PocketClaim } from '#lib/types.ts';
 	import { ticketsText } from '#lib/prize.ts';
 	import QuestsCard from '#lib/components/QuestsCard.svelte';
+	import PotCard from '#lib/components/PotCard.svelte';
+	import DuelsCard from '#lib/components/DuelsCard.svelte';
 	import { getLive } from '#lib/live.svelte.ts';
 	import { feedText } from '#lib/prize.ts';
 	import { getSession } from '#lib/session.svelte.ts';
@@ -160,7 +162,9 @@
 					>
 						<span class="stub-name">{i18n.t(`series.${t.series}`)}</span>
 						<span class="stub-foil"></span>
-						<span class="stub-src">{i18n.t(`source.${t.source}`)}</span>
+						<span class="stub-src"
+							>{t.from ? i18n.t('stub.from', { name: t.from }) : i18n.t(`source.${t.source}`)}</span
+						>
 					</span>
 				{/each}
 			</button>
@@ -254,6 +258,8 @@
 		</article>
 	</section>
 
+	<DuelsCard />
+	<PotCard {now} />
 	<QuestsCard />
 
 	<footer class="foot">

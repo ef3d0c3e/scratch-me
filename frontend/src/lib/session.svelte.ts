@@ -11,7 +11,7 @@ import type { Cosmetic, MeDto, Prize, Progress, Scratched, TicketDto } from './t
 /** Something to tell the player, shown a few seconds */
 export interface News {
 	id: number;
-	kind: 'level' | 'quest' | 'bonus' | 'achievement';
+	kind: 'level' | 'quest' | 'bonus' | 'achievement' | 'gift' | 'duel' | 'pot';
 	what: string;
 	reward: Prize;
 }
@@ -57,6 +57,11 @@ export class Session {
 		if (p.bonus) push('bonus', '', p.bonus);
 		for (const a of p.achievements) push('achievement', a.what, a.reward);
 		this.progressed++;
+	}
+
+	/** News from someone else: a gift, a duel, the pot */
+	tell(kind: News['kind'], what: string, reward: Prize = { kind: 'nothing' }) {
+		this.news.push({ id: ++this.newsId, kind, what, reward });
 	}
 
 	dismiss(id: number) {

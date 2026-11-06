@@ -100,11 +100,12 @@ pub async fn live(
         loop {
             tokio::select! {
                 event = rx.recv() => match event {
-                    Ok(json) => {
-                        if session.text(json.to_string()).await.is_err() {
+                    Ok(env) if env.is_for(uid) => {
+                        if session.text(env.json.clone()).await.is_err() {
                             break;
                         }
                     }
+                    Ok(_) => {}
                     // A slow client missed some events: it keeps going with the next ones
                     Err(RecvError::Lagged(_)) => {}
                     Err(RecvError::Closed) => break,

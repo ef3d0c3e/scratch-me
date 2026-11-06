@@ -26,9 +26,11 @@ export type Series =
 	| 'word_search'
 	| 'pumpkin_patch'
 	| 'snowball'
+	| 'pot_ticket'
+	| 'duel'
 	| 'ticket_chain'
 	| 'golden';
-export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
+export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel';
 
 export type ThemeId =
 	| 'midnight'
@@ -60,6 +62,8 @@ export interface TicketDto {
 	series: Series;
 	source: Source;
 	created_at: string;
+	/** Who sent it, for a gift */
+	from?: string | null;
 }
 
 export interface Pocket {
@@ -216,6 +220,8 @@ export interface ShopDto {
 export interface Bought {
 	coins: number;
 	ticket: TicketDto | null;
+	/** A gift went to this player */
+	gift_to?: string | null;
 	item: Cosmetic | null;
 	progress: Progress;
 }
@@ -384,6 +390,38 @@ export interface WordSearchLayout {
 export interface PumpkinLayout {
 	pumpkins: ({ kind: 'ghost' } | { kind: 'candy'; candy: number } | { kind: 'golden' })[];
 	candy: number;
+}
+
+export interface PotTicketLayout {
+	instant: number;
+}
+
+export interface DuelLayout {
+	opponent: string;
+	mine: number[];
+	theirs: number[];
+	won: boolean;
+}
+
+/** Today's shared pot, see backend/src/routes/pot.rs */
+export interface PotDto {
+	amount: number;
+	entries: number;
+	mine: number;
+	draws_at: string;
+	last: { day: string; winner: string | null; amount: number } | null;
+}
+
+export type DuelStatus = 'open' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+export interface DuelDto {
+	id: number;
+	challenger: string;
+	opponent: string;
+	stake: number;
+	status: DuelStatus;
+	created_at: string;
+	winner: string | null;
 }
 
 export interface SnowballLayout {

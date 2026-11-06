@@ -2,7 +2,9 @@ use actix_web::{HttpResponse, get, web};
 
 use crate::auth;
 
+pub mod duels;
 pub mod player;
+pub mod pot;
 pub mod progression;
 pub mod shop;
 pub mod social;
@@ -50,6 +52,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(social::post_announcement)
             .service(social::delete_announcement)
             .service(social::profile)
-            .service(social::set_title),
+            .service(social::set_title)
+            .service(pot::get_pot)
+            .service(duels::challenge)
+            .service(duels::list)
+            .service(duels::answer),
     );
 }

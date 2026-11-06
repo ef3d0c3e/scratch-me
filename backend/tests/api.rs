@@ -566,7 +566,7 @@ async fn shouts_are_shared_paced_and_mutable() {
     assert_eq!(status, 201);
     assert_eq!(body["shout"]["body"], "hello all");
     assert_eq!(body["shout"]["level"], 1);
-    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap().json).unwrap();
     assert_eq!((live["type"].as_str(), live["body"].as_str()), (Some("chat"), Some("hello all")));
 
     let (status, _) = post_json(&app, "/api/shoutbox", &a, json!({ "body": "again" })).await;
@@ -614,7 +614,7 @@ async fn only_admins_announce() {
     let mut rx = state.live.subscribe();
     let (status, a) = post_json(&app, "/api/announcements", &admin, json!({ "body": "Happy hour tonight" })).await;
     assert_eq!(status, 201);
-    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap().json).unwrap();
     assert_eq!(live["type"], "announcement");
     let (_, list) = get(&app, "/api/announcements", &player).await;
     assert_eq!(list[0]["body"], "Happy hour tonight");
@@ -651,7 +651,7 @@ async fn big_wins_reach_everyone_after_the_scratch() {
     post(&app, &format!("/api/tickets/{small}/scratch"), &me).await;
     assert!(rx.try_recv().is_err(), "50 coins is not news");
     post(&app, &format!("/api/tickets/{big}/scratch"), &me).await;
-    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap().json).unwrap();
     assert_eq!(live["type"], "win");
     assert_eq!(live["user"], name.as_str());
     assert_eq!(live["prize"], json!({ "kind": "coins", "amount": 1000 }));
@@ -951,4 +951,143 @@ async fn seasonal_tickets_are_sold_in_season_only() {
             assert_eq!((status, body["error"].as_str()), (409, Some("out_of_season")), "{key}");
         }
     }
+}
+
+#[actix_web::test]
+async fn gifts_go_to_the_other_player_marked_with_the_sender() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let (a, b) = (unique("giver"), unique("taker"));
+    let me = register(&app, &a, "UTC").await;
+    let them = register(&app, &b, "UTC").await;
+    let bid = user_id(&b).await;
+    let mut rx = state.live.subscribe();
+    let gift = |to: &str| json!({ "kind": "ticket", "series": "lucky_three", "to": to });
+    let (status, body) = post_json(&app, "/api/shop/buy", &me, gift(&a)).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("gift_to_self")));
+    let (status, _) = post_json(&app, "/api/shop/buy", &me, gift("nobody-at-all")).await;
+    assert_eq!(status, 404);
+
+    let (status, body) = post_json(&app, "/api/shop/buy", &me, gift(&b.to_uppercase())).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["coins"], STARTING_COINS - 35);
+    assert_eq!(body["gift_to"], b.as_str());
+    assert!(body["ticket"].is_null(), "the sender gets no ticket");
+    let env = rx.try_recv().unwrap();
+    assert!(env.is_for(bid) && !env.is_for(bid + 1), "only the receiver hears of it");
+    let live: Value = serde_json::from_str(&env.json).unwrap();
+    assert_eq!((live["type"].as_str(), live["from"].as_str()), (Some("gift"), Some(a.as_str())));
+
+    let (_, mine) = get(&app, "/api/me", &them).await;
+    let t = mine["tickets"].as_array().unwrap().iter().find(|t| t["source"] == "gift").expect("the gift");
+    assert_eq!(t["from"], a.as_str());
+    assert_eq!(t["series"], "lucky_three");
+}
+
+#[actix_web::test]
+async fn pot_tickets_fill_the_pot_and_one_entry_wins_it() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("pot");
+    let me = register(&app, &name, "UTC").await;
+    let (_, before) = get(&app, "/api/pot", &me).await;
+    assert_eq!(before["mine"], 0);
+    let (status, body) =
+        post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "pot_ticket" })).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["ticket"]["series"], "pot_ticket");
+    let (_, after) = get(&app, "/api/pot", &me).await;
+    assert_eq!(after["mine"], 1);
+    assert!(after["entries"].as_i64() > before["entries"].as_i64());
+    assert!(after["amount"].as_i64().unwrap() >= before["amount"].as_i64().unwrap() + 20);
+
+    // A past day with this one entry: the chores draw it, once. (Other tests run
+    // chores too and may draw it first, on their own hub: the hub's own test
+    // checks the news goes out.)
+    let uid = user_id(&name).await;
+    let day =
+        chrono::NaiveDate::from_ymd_opt(2001, 1, 1).unwrap() + chrono::Days::new(rand::random::<u32>() as u64 % 3000);
+    let mut c = conn().await;
+    diesel::insert_into(schema::pots::table)
+        .values((schema::pots::day.eq(day), schema::pots::amount.eq(777i64)))
+        .execute(&mut c)
+        .await
+        .unwrap();
+    diesel::insert_into(schema::pot_entries::table)
+        .values((schema::pot_entries::day.eq(day), schema::pot_entries::user_id.eq(uid)))
+        .execute(&mut c)
+        .await
+        .unwrap();
+    let (_, me_before) = get(&app, "/api/me", &me).await;
+    let (a, b) = tokio::join!(scratchme_api::chores(&state), scratchme_api::chores(&state));
+    a.unwrap();
+    b.unwrap();
+    let (_, me_after) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_after["coins"].as_i64().unwrap(), me_before["coins"].as_i64().unwrap() + 777, "paid once");
+    let winner: Option<i64> =
+        schema::pots::table.find(day).select(schema::pots::winner_id).first(&mut c).await.unwrap();
+    assert_eq!(winner, Some(uid));
+}
+
+#[actix_web::test]
+async fn duels_stake_play_out_and_refund() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let (a, b) = (unique("duela"), unique("duelb"));
+    let ca = register(&app, &a, "UTC").await;
+    let cb = register(&app, &b, "UTC").await;
+    let (status, body) = post_json(&app, "/api/duels", &ca, json!({ "opponent": a })).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("duel_self")));
+
+    // Declined: the stake comes back
+    let (status, d) = post_json(&app, "/api/duels", &ca, json!({ "opponent": b })).await;
+    assert_eq!(status, 200);
+    assert_eq!(get(&app, "/api/me", &ca).await.1["coins"], STARTING_COINS - 100);
+    let id = d["id"].as_i64().unwrap();
+    let (status, _) = post_json(&app, &format!("/api/duels/{id}"), &ca, json!({ "action": "accept" })).await;
+    assert_eq!(status, 422, "the challenger cannot accept");
+    let (status, d) = post_json(&app, &format!("/api/duels/{id}"), &cb, json!({ "action": "decline" })).await;
+    assert_eq!((status, d["status"].as_str()), (200, Some("declined")));
+    assert_eq!(get(&app, "/api/me", &ca).await.1["coins"], STARTING_COINS);
+
+    // Accepted twice at once: played once
+    let (_, d) = post_json(&app, "/api/duels", &ca, json!({ "opponent": b })).await;
+    let uri = format!("/api/duels/{}", d["id"]);
+    let accept = || post_json(&app, &uri, &cb, json!({ "action": "accept" }));
+    let (x, y) = tokio::join!(accept(), accept());
+    let mut statuses = [x.0, y.0];
+    statuses.sort();
+    assert_eq!(statuses, [200, 404]);
+    let (_, list) = get(&app, "/api/duels", &cb).await;
+    let played = &list.as_array().unwrap()[0];
+    assert_eq!(played["status"], "accepted");
+    let winner = played["winner"].as_str().unwrap().to_owned();
+
+    // Each has a duel ticket; scratched, the winner's pays the pot
+    let mut total = 0;
+    for (name, cookie) in [(&a, &ca), (&b, &cb)] {
+        let (_, me) = get(&app, "/api/me", cookie).await;
+        let t =
+            me["tickets"].as_array().unwrap().iter().find(|t| t["series"] == "duel").expect("a duel ticket").clone();
+        let (status, s) = post(&app, &format!("/api/tickets/{}/scratch", t["id"]), cookie).await;
+        assert_eq!(status, 200);
+        assert_eq!(s["layout"]["won"], *name == winner);
+        total += s["coins"].as_i64().unwrap();
+    }
+    assert_eq!(total, 2 * STARTING_COINS - 200 + 180, "the house keeps 20");
+
+    // Expired: refunded by the chores
+    let (_, d) = post_json(&app, "/api/duels", &ca, json!({ "opponent": b })).await;
+    let id = d["id"].as_i64().unwrap();
+    let mut c = conn().await;
+    diesel::update(schema::duels::table.find(id))
+        .set(schema::duels::created_at.eq(chrono::Utc::now() - chrono::Duration::hours(25)))
+        .execute(&mut c)
+        .await
+        .unwrap();
+    let before = get(&app, "/api/me", &ca).await.1["coins"].as_i64().unwrap();
+    scratchme_api::chores(&state).await.unwrap();
+    assert_eq!(get(&app, "/api/me", &ca).await.1["coins"].as_i64().unwrap(), before + 100);
+    let (_, list) = get(&app, "/api/duels", &ca).await;
+    assert_eq!(list[0]["status"], "expired");
 }

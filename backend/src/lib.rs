@@ -37,3 +37,17 @@ pub async fn make_admin(database_url: &str, username: &str) -> anyhow::Result<bo
         .await?;
     Ok(n == 1)
 }
+
+/// Work done on a clock: drawing past days' pots, expiring stale duels.
+/// Runs once a minute in the server; tests call it directly.
+pub async fn chores(state: &AppState) -> anyhow::Result<()> {
+    let mut conn = state.pool.get().await?;
+    for (user, amount) in routes::pot::draw_due(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))? {
+        tracing::info!(%user, amount, "pot won");
+        state.live.pot(&user, amount);
+    }
+    for (challenger, id) in routes::duels::expire_due(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))? {
+        state.live.notify(challenger, live::Event::Duel { id, from: String::new(), status: "expired".into() });
+    }
+    Ok(())
+}

@@ -17,6 +17,7 @@ pub mod bomb;
 pub mod bonus;
 pub mod cash_wheel;
 pub mod derby;
+pub mod duel;
 pub mod fishing;
 pub mod golden;
 pub mod high_card;
@@ -28,6 +29,7 @@ pub mod mystery_boxes;
 pub mod number_match;
 pub mod play;
 pub mod plinko;
+pub mod pot_ticket;
 pub mod pumpkin_patch;
 pub mod push_luck;
 pub mod rocket;
@@ -70,10 +72,13 @@ pub enum Series {
     WordSearch,
     PumpkinPatch,
     Snowball,
+    PotTicket,
+    Duel,
 }
 
 impl Series {
-    pub const ALL: [Series; 27] = [
+    pub const ALL: [Series; 29] = [
+        Series::PotTicket,
         Series::PumpkinPatch,
         Series::Snowball,
         Series::LuckyThree,
@@ -101,6 +106,7 @@ impl Series {
         Series::SafeCracker,
         Series::TicketChain,
         Series::Golden,
+        Series::Duel,
     ];
 
     /// The name stored in the database and sent to the client
@@ -133,6 +139,8 @@ impl Series {
             Series::WordSearch => "word_search",
             Series::PumpkinPatch => "pumpkin_patch",
             Series::Snowball => "snowball",
+            Series::PotTicket => "pot_ticket",
+            Series::Duel => "duel",
         }
     }
 
@@ -168,7 +176,8 @@ impl Series {
             Series::WordSearch => Some(word_search::PRICE),
             Series::PumpkinPatch => Some(pumpkin_patch::PRICE),
             Series::Snowball => Some(snowball::PRICE),
-            Series::TicketChain | Series::Golden => None,
+            Series::PotTicket => Some(pot_ticket::PRICE),
+            Series::TicketChain | Series::Golden | Series::Duel => None,
         }
     }
 
@@ -207,6 +216,8 @@ impl Series {
             Series::WordSearch => word_search::draw(rng),
             Series::PumpkinPatch => pumpkin_patch::draw(rng),
             Series::Snowball => snowball::draw(rng),
+            Series::PotTicket => pot_ticket::draw(rng),
+            Series::Duel => duel::draw(rng),
         }
     }
 
@@ -311,6 +322,9 @@ pub enum Source {
     Shop,
     /// Levels, quests and achievements
     Reward,
+    /// Bought for the player by another one
+    Gift,
+    Duel,
 }
 
 impl Source {
@@ -321,6 +335,8 @@ impl Source {
             Source::Prize => "prize",
             Source::Shop => "shop",
             Source::Reward => "reward",
+            Source::Gift => "gift",
+            Source::Duel => "duel",
         }
     }
 }
@@ -405,8 +421,9 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(11);
         for s in Series::ALL {
             let Some(price) = s.price() else { continue };
-            // Played move by move: each game's own tests check its payback under several strategies
-            if s.is_played() {
+            // Played move by move: each game's own tests check its payback under several strategies.
+            // The Pot Ticket's worth is mostly its share of the pot, paid apart.
+            if s.is_played() || s == Series::PotTicket {
                 continue;
             }
             let ratio = measured_value(s, 60_000, &mut rng) / price as f64;

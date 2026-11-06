@@ -24,6 +24,8 @@ pub struct TicketDto {
     pub series: String,
     pub source: String,
     pub created_at: DateTime<Utc>,
+    /// Who sent it, for a gift
+    pub from: Option<String>,
 }
 
 /// Draws `n` tickets of `series` and gives them to the player
@@ -54,10 +56,31 @@ pub(crate) async fn issue(
     };
     let issued = diesel::insert_into(tickets::table)
         .values(&rows)
-        .returning((tickets::id, tickets::series, tickets::source, tickets::created_at))
+        .returning((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
         .get_results(conn)
         .await?;
     Ok(issued)
+}
+
+/// Gives a player a ticket drawn already (a duel's), rather than drawing one
+pub(crate) async fn issue_drawn(
+    conn: &mut AsyncPgConnection,
+    user_id: i64,
+    series: Series,
+    source: Source,
+    drawn: crate::tickets::Drawn,
+) -> ApiResult<TicketDto> {
+    Ok(diesel::insert_into(tickets::table)
+        .values((
+            tickets::user_id.eq(user_id),
+            tickets::series.eq(series.key()),
+            tickets::layout.eq(drawn.layout),
+            tickets::prize.eq(serde_json::to_value(drawn.prize).expect("prize serializes")),
+            tickets::source.eq(source.key()),
+        ))
+        .returning((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
+        .get_result(conn)
+        .await?)
 }
 
 /// Draws one ticket of each series listed, in order

@@ -90,7 +90,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         .filter(tickets::user_id.eq(user.id))
         .filter(tickets::scratched_at.is_null())
         .order(tickets::id.asc())
-        .select((tickets::id, tickets::series, tickets::source, tickets::created_at))
+        .select((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
         .load(&mut conn)
         .await?;
 
