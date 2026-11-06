@@ -1,0 +1,21 @@
+# Development database. The API and the frontend run on the host (make dev).
+# Its own project and port (5434), so it never touches AnyCardz's.
+name: scratchme-dev
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: scratchme
+      POSTGRES_PASSWORD: scratchme
+      POSTGRES_DB: scratchme
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scratchme"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  db-data:

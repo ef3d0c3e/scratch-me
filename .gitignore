@@ -1,0 +1,9 @@
+/target/
+node_modules/
+/frontend/.svelte-kit/
+/frontend/build/
+/frontend/test-results/
+.env
+# Local tooling configuration (holds the Lific API key)
+.mcp.json
+.claude/settings.local.json
