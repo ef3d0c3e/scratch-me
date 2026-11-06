@@ -11,11 +11,15 @@ use crate::cosmetics::Cosmetic;
 
 pub mod bingo;
 pub mod cash_wheel;
+pub mod derby;
 pub mod golden;
 pub mod high_card;
+pub mod lucky_dice;
 pub mod lucky_reels;
 pub mod lucky_three;
 pub mod number_match;
+pub mod plinko;
+pub mod tic_tac_toe;
 pub mod ticket_chain;
 pub mod treasure_dig;
 
@@ -31,15 +35,23 @@ pub enum Series {
     LuckyReels,
     Bingo,
     TreasureDig,
+    TicTacToe,
+    LuckyDice,
+    Derby,
+    Plinko,
 }
 
 impl Series {
-    pub const ALL: [Series; 9] = [
+    pub const ALL: [Series; 13] = [
         Series::LuckyThree,
+        Series::TicTacToe,
+        Series::LuckyDice,
         Series::HighCard,
         Series::LuckyReels,
         Series::Bingo,
         Series::NumberMatch,
+        Series::Derby,
+        Series::Plinko,
         Series::CashWheel,
         Series::TreasureDig,
         Series::TicketChain,
@@ -58,6 +70,10 @@ impl Series {
             Series::LuckyReels => "lucky_reels",
             Series::Bingo => "bingo",
             Series::TreasureDig => "treasure_dig",
+            Series::TicTacToe => "tic_tac_toe",
+            Series::LuckyDice => "lucky_dice",
+            Series::Derby => "derby",
+            Series::Plinko => "plinko",
         }
     }
 
@@ -75,6 +91,10 @@ impl Series {
             Series::LuckyReels => Some(lucky_reels::PRICE),
             Series::Bingo => Some(bingo::PRICE),
             Series::TreasureDig => Some(treasure_dig::PRICE),
+            Series::TicTacToe => Some(tic_tac_toe::PRICE),
+            Series::LuckyDice => Some(lucky_dice::PRICE),
+            Series::Derby => Some(derby::PRICE),
+            Series::Plinko => Some(plinko::PRICE),
             Series::TicketChain | Series::Golden => None,
         }
     }
@@ -91,6 +111,10 @@ impl Series {
             Series::LuckyReels => lucky_reels::draw(rng),
             Series::Bingo => bingo::draw(rng),
             Series::TreasureDig => treasure_dig::draw(rng),
+            Series::TicTacToe => tic_tac_toe::draw(rng),
+            Series::LuckyDice => lucky_dice::draw(rng),
+            Series::Derby => derby::draw(rng),
+            Series::Plinko => plinko::draw(rng),
         }
     }
 

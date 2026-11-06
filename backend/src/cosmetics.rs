@@ -1,81 +1,106 @@
-//! Cosmetics: app themes and scratch tools. Some are sold in the shop, some
-//! only come from Golden Tickets. Everyone owns the defaults.
+//! Cosmetics: app themes, scratch tools and ticket foils. Each comes from one
+//! place: owned by everyone (the defaults), sold in the shop, won on Golden
+//! Tickets, or earned with a trophy.
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Theme {
-    Midnight,
-    Sunset,
-    Mint,
-    /// Golden Ticket only
-    Neon,
-    /// Golden Ticket only
-    Royal,
+/// Where a cosmetic comes from
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Origin {
+    Default,
+    Shop {
+        price: i64,
+    },
+    Golden,
+    /// Earned with this achievement
+    Trophy {
+        achievement: &'static str,
+    },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Tool {
-    Coin,
-    Key,
-    Eraser,
-    /// Golden Ticket only
-    Laser,
+/// One kind of cosmetic: its items, their keys and where they come from
+macro_rules! catalog {
+    ($(#[$doc:meta])* $name:ident, default $default:ident, { $($item:ident => $key:literal, $origin:expr;)+ }) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        pub enum $name {
+            $($item,)+
+        }
+
+        impl $name {
+            pub const ALL: &[$name] = &[$($name::$item,)+];
+            pub const DEFAULT: $name = $name::$default;
+
+            pub fn key(self) -> &'static str {
+                match self {
+                    $($name::$item => $key,)+
+                }
+            }
+
+            pub fn parse(key: &str) -> Option<$name> {
+                $name::ALL.iter().copied().find(|t| t.key() == key)
+            }
+
+            pub fn origin(self) -> Origin {
+                match self {
+                    $($name::$item => $origin,)+
+                }
+            }
+        }
+    };
 }
 
-impl Theme {
-    pub const ALL: [Theme; 5] = [Theme::Midnight, Theme::Sunset, Theme::Mint, Theme::Neon, Theme::Royal];
-    pub const DEFAULT: Theme = Theme::Midnight;
-
-    pub fn key(self) -> &'static str {
-        match self {
-            Theme::Midnight => "midnight",
-            Theme::Sunset => "sunset",
-            Theme::Mint => "mint",
-            Theme::Neon => "neon",
-            Theme::Royal => "royal",
-        }
-    }
-
-    pub fn parse(key: &str) -> Option<Theme> {
-        Theme::ALL.into_iter().find(|t| t.key() == key)
-    }
-
-    /// Shop price, None when it is not sold
-    pub fn price(self) -> Option<i64> {
-        match self {
-            Theme::Sunset | Theme::Mint => Some(1500),
-            Theme::Midnight | Theme::Neon | Theme::Royal => None,
-        }
-    }
+const fn shop(price: i64) -> Origin {
+    Origin::Shop { price }
 }
 
-impl Tool {
-    pub const ALL: [Tool; 4] = [Tool::Coin, Tool::Key, Tool::Eraser, Tool::Laser];
-    pub const DEFAULT: Tool = Tool::Coin;
-
-    pub fn key(self) -> &'static str {
-        match self {
-            Tool::Coin => "coin",
-            Tool::Key => "key",
-            Tool::Eraser => "eraser",
-            Tool::Laser => "laser",
-        }
-    }
-
-    pub fn parse(key: &str) -> Option<Tool> {
-        Tool::ALL.into_iter().find(|t| t.key() == key)
-    }
-
-    pub fn price(self) -> Option<i64> {
-        match self {
-            Tool::Key | Tool::Eraser => Some(1200),
-            Tool::Coin | Tool::Laser => None,
-        }
-    }
+const fn trophy(achievement: &'static str) -> Origin {
+    Origin::Trophy { achievement }
 }
+
+catalog!(
+    /// The app's colours, and the foil's when the foil is the plain one
+    Theme, default Midnight, {
+        Midnight => "midnight", Origin::Default;
+        Sunset => "sunset", shop(1500);
+        Mint => "mint", shop(1500);
+        Ocean => "ocean", shop(1500);
+        Candy => "candy", shop(2000);
+        Arcade => "arcade", shop(2500);
+        Neon => "neon", Origin::Golden;
+        Royal => "royal", Origin::Golden;
+        Forest => "forest", Origin::Golden;
+        Champion => "champion", trophy("level_10");
+    }
+);
+
+catalog!(
+    /// What the player scratches with
+    Tool, default Coin, {
+        Coin => "coin", Origin::Default;
+        Card => "card", shop(1000);
+        Key => "key", shop(1200);
+        Eraser => "eraser", shop(1200);
+        Paw => "paw", shop(1800);
+        Laser => "laser", Origin::Golden;
+        Wand => "wand", Origin::Golden;
+        Shovel => "shovel", trophy("deep_digger");
+    }
+);
+
+catalog!(
+    /// The scratch layer of every ticket
+    Foil, default Silver, {
+        Silver => "silver", Origin::Default;
+        Carbon => "carbon", shop(1500);
+        Leopard => "leopard", shop(1800);
+        Gold => "gold", shop(2000);
+        Holo => "holo", shop(2500);
+        Galaxy => "galaxy", Origin::Golden;
+    }
+);
 
 /// One cosmetic, as stored: (kind, item)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -83,6 +108,7 @@ impl Tool {
 pub enum Cosmetic {
     Theme(Theme),
     Tool(Tool),
+    Foil(Foil),
 }
 
 impl Cosmetic {
@@ -90,6 +116,7 @@ impl Cosmetic {
         match self {
             Cosmetic::Theme(_) => "theme",
             Cosmetic::Tool(_) => "tool",
+            Cosmetic::Foil(_) => "foil",
         }
     }
 
@@ -97,6 +124,7 @@ impl Cosmetic {
         match self {
             Cosmetic::Theme(t) => t.key(),
             Cosmetic::Tool(t) => t.key(),
+            Cosmetic::Foil(t) => t.key(),
         }
     }
 
@@ -104,29 +132,44 @@ impl Cosmetic {
         match kind {
             "theme" => Theme::parse(item).map(Cosmetic::Theme),
             "tool" => Tool::parse(item).map(Cosmetic::Tool),
+            "foil" => Foil::parse(item).map(Cosmetic::Foil),
             _ => None,
         }
     }
 
-    pub fn is_default(self) -> bool {
-        matches!(self, Cosmetic::Theme(Theme::DEFAULT) | Cosmetic::Tool(Tool::DEFAULT))
-    }
-
-    pub fn price(self) -> Option<i64> {
+    pub fn origin(self) -> Origin {
         match self {
-            Cosmetic::Theme(t) => t.price(),
-            Cosmetic::Tool(t) => t.price(),
+            Cosmetic::Theme(t) => t.origin(),
+            Cosmetic::Tool(t) => t.origin(),
+            Cosmetic::Foil(t) => t.origin(),
         }
     }
 
-    /// Everything a Golden Ticket can give: every cosmetic but the defaults
-    pub fn prizes() -> Vec<Cosmetic> {
+    pub fn is_default(self) -> bool {
+        self.origin() == Origin::Default
+    }
+
+    /// Shop price, None when it is not sold
+    pub fn price(self) -> Option<i64> {
+        match self.origin() {
+            Origin::Shop { price } => Some(price),
+            _ => None,
+        }
+    }
+
+    /// Every cosmetic, themes then tools then foils
+    pub fn all() -> Vec<Cosmetic> {
         Theme::ALL
-            .into_iter()
-            .map(Cosmetic::Theme)
-            .chain(Tool::ALL.into_iter().map(Cosmetic::Tool))
-            .filter(|c| !c.is_default())
+            .iter()
+            .map(|t| Cosmetic::Theme(*t))
+            .chain(Tool::ALL.iter().map(|t| Cosmetic::Tool(*t)))
+            .chain(Foil::ALL.iter().map(|t| Cosmetic::Foil(*t)))
             .collect()
+    }
+
+    /// What a Golden Ticket can give: anything but the defaults and the trophies' own
+    pub fn prizes() -> Vec<Cosmetic> {
+        Cosmetic::all().into_iter().filter(|c| matches!(c.origin(), Origin::Shop { .. } | Origin::Golden)).collect()
     }
 }
 
@@ -139,26 +182,37 @@ mod tests {
 
     #[test]
     fn keys_round_trip() {
-        for t in Theme::ALL {
-            assert_eq!(Cosmetic::parse("theme", t.key()), Some(Cosmetic::Theme(t)));
-        }
-        for t in Tool::ALL {
-            assert_eq!(Cosmetic::parse("tool", t.key()), Some(Cosmetic::Tool(t)));
+        for c in Cosmetic::all() {
+            assert_eq!(Cosmetic::parse(c.kind(), c.item()), Some(c));
         }
         assert_eq!(Cosmetic::parse("hat", "coin"), None);
     }
 
     #[test]
     fn json() {
-        let c = Cosmetic::Theme(Theme::Neon);
-        assert_eq!(serde_json::to_value(c).unwrap(), serde_json::json!({ "kind": "theme", "id": "neon" }));
+        let c = Cosmetic::Foil(Foil::Holo);
+        assert_eq!(serde_json::to_value(c).unwrap(), serde_json::json!({ "kind": "foil", "id": "holo" }));
     }
 
     #[test]
-    fn defaults_are_free_and_never_prizes() {
-        assert!(Cosmetic::prizes().iter().all(|c| !c.is_default()));
-        assert_eq!(Cosmetic::Theme(Theme::DEFAULT).price(), None);
-        // Some cosmetics only come from Golden Tickets
-        assert!(Cosmetic::prizes().iter().any(|c| c.price().is_none()));
+    fn one_default_per_kind_and_trophies_are_not_prizes() {
+        for kind in ["theme", "tool", "foil"] {
+            let defaults = Cosmetic::all().into_iter().filter(|c| c.kind() == kind && c.is_default()).count();
+            assert_eq!(defaults, 1, "{kind}");
+        }
+        assert!(Cosmetic::prizes().iter().all(|c| !matches!(c.origin(), Origin::Default | Origin::Trophy { .. })));
+        assert!(Cosmetic::prizes().iter().any(|c| c.origin() == Origin::Golden));
+    }
+
+    #[test]
+    fn trophies_name_real_achievements() {
+        let ids: Vec<&str> = crate::progress::achievements::all().iter().map(|a| a.id).collect();
+        for c in Cosmetic::all() {
+            if let Origin::Trophy { achievement } = c.origin() {
+                assert!(ids.contains(&achievement), "{} needs {achievement}", c.item());
+                let a = crate::progress::achievements::all().into_iter().find(|a| a.id == achievement).unwrap();
+                assert_eq!(a.reward, crate::tickets::Prize::Cosmetic { item: c }, "{achievement} gives it");
+            }
+        }
     }
 }

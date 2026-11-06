@@ -40,6 +40,7 @@ pub struct MeDto {
     /// What the player has on
     pub theme: String,
     pub tool: String,
+    pub foil: String,
     /// Cosmetics owned besides the defaults
     pub owned: Vec<Cosmetic>,
     pub level: levels::LevelDto,
@@ -50,13 +51,13 @@ pub struct MeDto {
     pub tickets: Vec<TicketDto>,
 }
 
-/// coins, tz, pocket count and time, theme, tool, xp, title, admin
-type UserRow = (i64, String, i32, DateTime<Utc>, String, String, i64, Option<String>, bool);
+/// coins, tz, pocket count and time, theme, tool, foil, xp, title, admin
+type UserRow = (i64, String, i32, DateTime<Utc>, String, String, String, i64, Option<String>, bool);
 
 #[get("/me")]
 pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<MeDto>> {
     let mut conn = state.pool.get().await?;
-    let (coins, tz, stored, at, theme, tool, xp, title, is_admin): UserRow = users::table
+    let (coins, tz, stored, at, theme, tool, foil, xp, title, is_admin): UserRow = users::table
         .find(user.id)
         .select((
             users::coins,
@@ -65,6 +66,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
             users::pocket_at,
             users::theme,
             users::tool,
+            users::foil,
             users::xp,
             users::title,
             users::is_admin,
@@ -112,6 +114,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         envelope,
         theme,
         tool,
+        foil,
         owned,
         level: levels::dto(xp),
         title,

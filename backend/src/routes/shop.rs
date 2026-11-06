@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::tickets::{TicketDto, issue};
 use crate::AppState;
 use crate::auth::CurrentUser;
-use crate::cosmetics::{Cosmetic, Theme, Tool};
+use crate::cosmetics::{Cosmetic, Origin};
 use crate::error::{ApiError, ApiResult};
 use crate::progress::{self, Event, Progress, levels};
 use crate::schema::{cosmetics, users};
@@ -22,10 +22,11 @@ pub struct TicketOffer {
     pub level: i32,
 }
 
+/// Every cosmetic and where it comes from: a price, a Golden Ticket, a trophy
 #[derive(Debug, Serialize)]
 pub struct CosmeticOffer {
     pub item: Cosmetic,
-    pub price: i64,
+    pub origin: Origin,
 }
 
 #[derive(Debug, Serialize)]
@@ -39,11 +40,7 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
     let tickets = Series::ALL
         .into_iter()
         .filter_map(|series| Some(TicketOffer { series, price: series.price()?, level: levels::shop_level(series) }));
-    let cosmetics = Theme::ALL
-        .into_iter()
-        .map(Cosmetic::Theme)
-        .chain(Tool::ALL.into_iter().map(Cosmetic::Tool))
-        .filter_map(|item| Some(CosmeticOffer { item, price: item.price()? }));
+    let cosmetics = Cosmetic::all().into_iter().map(|item| CosmeticOffer { item, origin: item.origin() });
     web::Json(ShopDto { tickets: tickets.collect(), cosmetics: cosmetics.collect() })
 }
 
@@ -128,6 +125,7 @@ pub struct Equip {
 pub struct Equipped {
     pub theme: String,
     pub tool: String,
+    pub foil: String,
 }
 
 #[post("/cosmetics/equip")]
@@ -152,14 +150,17 @@ pub async fn equip(
         }
     }
     let target = users::table.find(user.id);
-    let returned = (users::theme, users::tool);
-    let (theme, tool) = match item {
+    let returned = (users::theme, users::tool, users::foil);
+    let (theme, tool, foil) = match item {
         Cosmetic::Theme(t) => {
             diesel::update(target).set(users::theme.eq(t.key())).returning(returned).get_result(&mut conn).await?
         }
         Cosmetic::Tool(t) => {
             diesel::update(target).set(users::tool.eq(t.key())).returning(returned).get_result(&mut conn).await?
         }
+        Cosmetic::Foil(t) => {
+            diesel::update(target).set(users::foil.eq(t.key())).returning(returned).get_result(&mut conn).await?
+        }
     };
-    Ok(web::Json(Equipped { theme, tool }))
+    Ok(web::Json(Equipped { theme, tool, foil }))
 }

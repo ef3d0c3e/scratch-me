@@ -2,6 +2,7 @@
 //! lifetime numbers, some catch a single moment.
 
 use super::events::Event;
+use crate::cosmetics::{Cosmetic, Theme, Tool};
 use crate::tickets::{Prize, Series};
 
 /// What a counting achievement counts
@@ -25,6 +26,8 @@ pub enum Moment {
     WheelTwenty,
     /// A Ticket Chain holding this many tickets
     ChainOf(usize),
+    /// A Treasure Dig paying this many coins or more
+    DigAtLeast(i64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +49,7 @@ pub fn all() -> Vec<Achievement> {
     use Moment::*;
     let coins = |amount| Prize::Coins { amount };
     let golden = Prize::Ticket { series: Series::Golden };
+    let cosmetic = |item| Prize::Cosmetic { item };
     let a = |id, goal, reward| Achievement { id, goal, reward };
     vec![
         a("first_scratch", Reach(Scratched, 1), coins(50)),
@@ -62,7 +66,8 @@ pub fn all() -> Vec<Achievement> {
         a("streak_30", Reach(BestStreak, 30), Prize::Tickets { series: vec![Series::Golden, Series::Golden] }),
         a("quests_30", Reach(QuestsDone, 30), coins(500)),
         a("collector_5", Reach(Cosmetics, 5), coins(500)),
-        a("level_10", Reach(Level, 10), golden),
+        a("deep_digger", At(DigAtLeast(1000)), cosmetic(Cosmetic::Tool(Tool::Shovel))),
+        a("level_10", Reach(Level, 10), cosmetic(Cosmetic::Theme(Theme::Champion))),
     ]
 }
 
@@ -74,6 +79,7 @@ pub fn caught(moment: Moment, event: &Event) -> bool {
         Moment::GoldenScratched => s.series == Series::Golden,
         Moment::WheelTwenty => s.wheel == Some(20),
         Moment::ChainOf(n) => s.found >= n,
+        Moment::DigAtLeast(n) => s.series == Series::TreasureDig && s.coins >= n,
     }
 }
 

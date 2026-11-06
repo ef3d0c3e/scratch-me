@@ -789,3 +789,50 @@ async fn new_series_open_with_levels() {
         .collect();
     assert!(levels.contains(&("bingo".into(), 4)) && levels.contains(&("lucky_reels".into(), 2)));
 }
+
+#[actix_web::test]
+async fn foils_are_worn_and_trophy_items_are_earned_not_bought() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("foil");
+    let me = register_fresh(&app, &name, "UTC").await;
+    set_quests(&name, &[]).await;
+    set_coins(&name, 5000).await;
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    let origin = |kind: &str, id: &str| {
+        shop["cosmetics"].as_array().unwrap().iter().find(|c| c["item"] == json!({ "kind": kind, "id": id })).unwrap()["origin"].clone()
+    };
+    assert_eq!(origin("foil", "holo"), json!({ "kind": "shop", "price": 2500 }));
+    assert_eq!(origin("tool", "shovel"), json!({ "kind": "trophy", "achievement": "deep_digger" }));
+    assert_eq!(origin("foil", "galaxy"), json!({ "kind": "golden" }));
+
+    let holo = json!({ "kind": "foil", "id": "holo" });
+    let (status, _) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "cosmetic", "item": holo })).await;
+    assert_eq!(status, 200);
+    let (status, body) = post_json(&app, "/api/cosmetics/equip", &me, json!({ "item": holo })).await;
+    assert_eq!((status, body["foil"].as_str()), (200, Some("holo")));
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["foil"], "holo");
+    let shovel = json!({ "kind": "tool", "id": "shovel" });
+    let (status, _) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "cosmetic", "item": shovel })).await;
+    assert_eq!(status, 422, "trophy items are not sold");
+
+    // A big dig earns the trophy, and the trophy gives the shovel
+    let mut cells = vec![json!({ "kind": "sand" }); 16];
+    cells[0] = json!({ "kind": "chest", "coins": 3000 });
+    let id = known_ticket(&name, "treasure_dig", json!({ "cells": cells }), json!({ "kind": "nothing" })).await;
+    let uri = format!("/api/tickets/{id}/dig");
+    let mut last = Value::Null;
+    for cell in [0, 1, 2, 3] {
+        last = post_json(&app, &uri, &me, json!({ "cell": cell })).await.1;
+    }
+    let got: Vec<&str> = last["done"]["progress"]["achievements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["what"].as_str().unwrap())
+        .collect();
+    assert!(got.contains(&"deep_digger"), "{got:?}");
+    let (status, _) = post_json(&app, "/api/cosmetics/equip", &me, json!({ "item": shovel })).await;
+    assert_eq!(status, 200, "the shovel is theirs");
+}

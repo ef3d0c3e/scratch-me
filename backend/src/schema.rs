@@ -123,6 +123,7 @@ diesel::table! {
         xp -> Int8,
         title -> Nullable<Text>,
         is_admin -> Bool,
+        foil -> Text,
     }
 }
 
