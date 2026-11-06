@@ -36,4 +36,5 @@ Rules:
 
 - Backend rules: unit tests next to the code. Endpoints: `backend/tests/api.rs` (real Postgres; run races with `tokio::join!`).
 - Frontend logic: keep it out of components, in plain modules (e.g. `src/lib/scratch/foil.ts`), with Vitest tests next to it.
+- Playwright reuses an API and web server already listening on :8081/:5174, even one left over from an earlier run and built from older code. After backend changes, stop leftovers first (`ss -ltnp | grep -E ':8081|:5174'`): a stale API shows up as every new flow failing at once.
 - Flows: Playwright specs in `frontend/e2e/`, run on a phone and a desktop project. Use `newPlayer()` and `visit()` from `e2e/helpers.ts`, and prefer roles and visible text in locators.
