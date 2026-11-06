@@ -419,5 +419,24 @@ export default {
 	'words.yours': 'Your letters',
 	'words.pays': '1 word 30 · 2 words 100 · 3 words 400 · 4 words 2,000 · 5 words 20,000',
 	'achievement.aquarium': 'Full aquarium',
-	'achievement.aquarium.how': 'Catch every species of fish'
+	'achievement.aquarium.how': 'Catch every species of fish',
+
+	'series.pumpkin_patch': 'Pumpkin Patch',
+	'series.pumpkin_patch.rules':
+		'Count the candy in the pumpkins: the more there is, the more it pays',
+	'series.snowball': 'Snowball',
+	'series.snowball.rules':
+		'Your snowball rolls down five bumps: snow makes it grow, rocks shrink it',
+	'pumpkin.total': '{n} candies',
+	'pumpkin.pays': '13+ candies 40 · 15+ 150 · 17+ 500 · 19+ 2,500 · golden pumpkin +500',
+	'snow.size': 'Size {n}',
+	'snow.pays': 'Size 7: 30 · 8: 60 · 9: 150 · 11: 500 · 13+: 2,500',
+	'shop.until': 'Until {date}',
+	'theme.spooky': 'Spooky',
+	'theme.frost': 'Frost',
+	'achievement.pumpkin_king': 'Pumpkin king',
+	'achievement.pumpkin_king.how': 'Win 400 coins or more on a Pumpkin Patch',
+	'achievement.snow_champion': 'Snow champion',
+	'achievement.snow_champion.how': 'Win 500 coins or more on a Snowball',
+	'errors.out_of_season': 'That ticket is out of season.'
 } as const;

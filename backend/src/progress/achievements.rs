@@ -30,6 +30,8 @@ pub enum Moment {
     ChainOf(usize),
     /// A Treasure Dig paying this many coins or more
     DigAtLeast(i64),
+    /// A ticket of this series paying this many coins or more
+    SeriesAtLeast(Series, i64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +72,8 @@ pub fn all() -> Vec<Achievement> {
         a("collector_5", Reach(Cosmetics, 5), coins(500)),
         a("aquarium", Reach(Species, 12), Prize::Tickets { series: vec![Series::Golden, Series::Golden] }),
         a("deep_digger", At(DigAtLeast(1000)), cosmetic(Cosmetic::Tool(Tool::Shovel))),
+        a("pumpkin_king", At(SeriesAtLeast(Series::PumpkinPatch, 400)), cosmetic(Cosmetic::Theme(Theme::Spooky))),
+        a("snow_champion", At(SeriesAtLeast(Series::Snowball, 500)), cosmetic(Cosmetic::Theme(Theme::Frost))),
         a("level_10", Reach(Level, 10), cosmetic(Cosmetic::Theme(Theme::Champion))),
     ]
 }
@@ -83,6 +87,7 @@ pub fn caught(moment: Moment, event: &Event) -> bool {
         Moment::WheelTwenty => s.wheel == Some(20),
         Moment::ChainOf(n) => s.found >= n,
         Moment::DigAtLeast(n) => s.series == Series::TreasureDig && s.coins >= n,
+        Moment::SeriesAtLeast(series, n) => s.series == series && s.coins >= n,
     }
 }
 

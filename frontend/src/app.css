@@ -162,6 +162,40 @@
 	--foil-4: #c99a2e;
 	--foil-ink: rgba(100, 60, 0, 0.3);
 }
+:root[data-skin='spooky'] {
+	--night: #0f0a14;
+	--night-2: #1c1226;
+	--night-3: #2a1438;
+	--muted: #b9a3c9;
+	--glow: #f97316;
+	--gold: #fb923c;
+	--gold-deep: #ea580c;
+	--gold-shadow: #7c2d12;
+	--pink: #a3e635;
+	--pink-shadow: #365314;
+	--line: rgba(249, 115, 22, 0.22);
+	--foil-1: #8b7b9b;
+	--foil-2: #6b5b7b;
+	--foil-3: #a99abb;
+	--foil-4: #4b3d5b;
+	--foil-ink: rgba(249, 115, 22, 0.35);
+}
+:root[data-skin='frost'] {
+	--night: #0b1d2e;
+	--night-2: #10283f;
+	--night-3: #16324d;
+	--muted: #a5c8e4;
+	--glow: #7dd3fc;
+	--gold: #bae6fd;
+	--gold-deep: #38bdf8;
+	--gold-shadow: #075985;
+	--pink: #f0abfc;
+	--foil-1: #f0f9ff;
+	--foil-2: #bae6fd;
+	--foil-3: #ffffff;
+	--foil-4: #7dd3fc;
+	--foil-ink: rgba(7, 89, 133, 0.25);
+}
 :root[data-skin='royal'] {
 	--night: #0b0e2a;
 	--night-2: #141a45;

@@ -15,7 +15,9 @@ export const THEMES: ThemeId[] = [
 	'neon',
 	'royal',
 	'forest',
-	'champion'
+	'champion',
+	'spooky',
+	'frost'
 ];
 export const parseSkin = (v: string | undefined): ThemeId =>
 	THEMES.find((t) => t === v) ?? 'midnight';

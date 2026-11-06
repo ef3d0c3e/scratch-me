@@ -24,6 +24,8 @@ export type Series =
 	| 'fishing'
 	| 'word_bank'
 	| 'word_search'
+	| 'pumpkin_patch'
+	| 'snowball'
 	| 'ticket_chain'
 	| 'golden';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
@@ -38,7 +40,9 @@ export type ThemeId =
 	| 'neon'
 	| 'royal'
 	| 'forest'
-	| 'champion';
+	| 'champion'
+	| 'spooky'
+	| 'frost';
 export type ToolId = 'coin' | 'card' | 'key' | 'eraser' | 'paw' | 'laser' | 'wand' | 'shovel';
 export type FoilId = 'silver' | 'carbon' | 'leopard' | 'gold' | 'holo' | 'galaxy';
 export type Cosmetic =
@@ -204,7 +208,8 @@ export interface Scratched {
 }
 
 export interface ShopDto {
-	tickets: { series: Series; price: number; level: number }[];
+	/** `until`: a seasonal series' last day on sale, as [month, day] */
+	tickets: { series: Series; price: number; level: number; until: [number, number] | null }[];
 	cosmetics: { item: Cosmetic; origin: Origin }[];
 }
 
@@ -374,4 +379,14 @@ export interface WordBankLayout {
 export interface WordSearchLayout {
 	grid: string[];
 	targets: { word: string; coins: number; at: number[] | null }[];
+}
+
+export interface PumpkinLayout {
+	pumpkins: ({ kind: 'ghost' } | { kind: 'candy'; candy: number } | { kind: 'golden' })[];
+	candy: number;
+}
+
+export interface SnowballLayout {
+	bumps: number[];
+	sizes: number[];
 }

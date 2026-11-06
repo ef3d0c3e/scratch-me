@@ -26,7 +26,9 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	board_walk: { edge: '#eab308', ink: '#a16207', shadow: '#422006' },
 	fishing: { edge: '#06b6d4', ink: '#0e7490', shadow: '#083344' },
 	word_bank: { edge: '#84cc16', ink: '#4d7c0f', shadow: '#1a2e05' },
-	word_search: { edge: '#ec4899', ink: '#be185d', shadow: '#500724' }
+	word_search: { edge: '#ec4899', ink: '#be185d', shadow: '#500724' },
+	pumpkin_patch: { edge: '#f97316', ink: '#9a3412', shadow: '#431407' },
+	snowball: { edge: '#7dd3fc', ink: '#0369a1', shadow: '#082f49' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -56,7 +58,9 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	board_walk: { cols: 3, rows: 1 },
 	fishing: { cols: 4, rows: 1 },
 	word_bank: { cols: 6, rows: 2 },
-	word_search: { cols: 4, rows: 4 }
+	word_search: { cols: 4, rows: 4 },
+	pumpkin_patch: { cols: 3, rows: 3 },
+	snowball: { cols: 5, rows: 1 }
 };
 
 /** Series played move by move, not scratched all at once */
@@ -81,7 +85,9 @@ export const SKIN_SWATCH: Record<ThemeId, [string, string, string, string]> = {
 	candy: ['#3a0d2e', '#7a1f5c', '#ffb3d9', '#f5d0e6'],
 	arcade: ['#0a0a12', '#1f1f3a', '#00f0ff', '#ff3cac'],
 	forest: ['#0d1f12', '#1f3d24', '#d9b26a', '#7f9a6b'],
-	champion: ['#1a0f00', '#3d2400', '#ffd700', '#e6c36a']
+	champion: ['#1a0f00', '#3d2400', '#ffd700', '#e6c36a'],
+	spooky: ['#0f0a14', '#2a1438', '#f97316', '#6b5b7b'],
+	frost: ['#0b1d2e', '#16324d', '#bae6fd', '#e0f2fe']
 };
 
 /** The dictionary key naming a cosmetic */

@@ -28,9 +28,11 @@ pub mod mystery_boxes;
 pub mod number_match;
 pub mod play;
 pub mod plinko;
+pub mod pumpkin_patch;
 pub mod push_luck;
 pub mod rocket;
 pub mod safe_cracker;
+pub mod snowball;
 pub mod tic_tac_toe;
 pub mod ticket_chain;
 pub mod treasure_dig;
@@ -66,10 +68,14 @@ pub enum Series {
     Fishing,
     WordBank,
     WordSearch,
+    PumpkinPatch,
+    Snowball,
 }
 
 impl Series {
-    pub const ALL: [Series; 25] = [
+    pub const ALL: [Series; 27] = [
+        Series::PumpkinPatch,
+        Series::Snowball,
         Series::LuckyThree,
         Series::BoardWalk,
         Series::TicTacToe,
@@ -125,6 +131,8 @@ impl Series {
             Series::Fishing => "fishing",
             Series::WordBank => "word_bank",
             Series::WordSearch => "word_search",
+            Series::PumpkinPatch => "pumpkin_patch",
+            Series::Snowball => "snowball",
         }
     }
 
@@ -158,6 +166,8 @@ impl Series {
             Series::Fishing => Some(fishing::PRICE),
             Series::WordBank => Some(word_bank::PRICE),
             Series::WordSearch => Some(word_search::PRICE),
+            Series::PumpkinPatch => Some(pumpkin_patch::PRICE),
+            Series::Snowball => Some(snowball::PRICE),
             Series::TicketChain | Series::Golden => None,
         }
     }
@@ -195,12 +205,32 @@ impl Series {
             Series::Fishing => fishing::draw(rng),
             Series::WordBank => word_bank::draw(rng),
             Series::WordSearch => word_search::draw(rng),
+            Series::PumpkinPatch => pumpkin_patch::draw(rng),
+            Series::Snowball => snowball::draw(rng),
         }
     }
 
     /// Played by choosing where to dig, not by scratching all at once
     pub fn is_dig(self) -> bool {
         self == Series::TreasureDig
+    }
+
+    /// When a seasonal series is on sale: from and to, as (month, day), both included
+    pub fn season(self) -> Option<((u32, u32), (u32, u32))> {
+        match self {
+            Series::PumpkinPatch => Some(((10, 1), (11, 15))),
+            Series::Snowball => Some(((12, 1), (2, 29))),
+            _ => None,
+        }
+    }
+
+    /// On sale on this day (always, for the series that have no season)
+    pub fn in_season(self, day: chrono::NaiveDate) -> bool {
+        use chrono::Datelike;
+        let Some((from, to)) = self.season() else { return true };
+        let d = (day.month(), day.day());
+        // A season can run over the new year
+        if from <= to { from <= d && d <= to } else { d >= from || d <= to }
     }
 
     /// Played move by move through the play protocol (`play.rs`)
@@ -382,6 +412,18 @@ mod tests {
             let ratio = measured_value(s, 60_000, &mut rng) / price as f64;
             assert!((0.68..=0.92).contains(&ratio), "{} pays back {ratio:.2} of its price", s.key());
         }
+    }
+
+    #[test]
+    fn seasons() {
+        let d = |s: &str| s.parse::<chrono::NaiveDate>().unwrap();
+        assert!(Series::PumpkinPatch.in_season(d("2026-11-06")));
+        assert!(!Series::PumpkinPatch.in_season(d("2026-11-16")));
+        assert!(Series::Snowball.in_season(d("2026-12-25")));
+        assert!(Series::Snowball.in_season(d("2027-01-15")), "over the new year");
+        assert!(Series::Snowball.in_season(d("2028-02-29")));
+        assert!(!Series::Snowball.in_season(d("2027-03-01")));
+        assert!(Series::LuckyThree.in_season(d("2027-07-14")));
     }
 
     #[test]

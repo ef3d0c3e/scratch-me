@@ -1,6 +1,7 @@
 //! The shop: tickets and cosmetics for coins. And putting cosmetics on.
 
 use actix_web::{get, post, web};
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct TicketOffer {
     pub price: i64,
     /// The level it takes to buy it
     pub level: i32,
+    /// A seasonal series: its last day on sale, as (month, day)
+    pub until: Option<(u32, u32)>,
 }
 
 /// Every cosmetic and where it comes from: a price, a Golden Ticket, a trophy
@@ -37,9 +40,15 @@ pub struct ShopDto {
 
 #[get("/shop")]
 pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
-    let tickets = Series::ALL
-        .into_iter()
-        .filter_map(|series| Some(TicketOffer { series, price: series.price()?, level: levels::shop_level(series) }));
+    let today = Utc::now().date_naive();
+    let tickets = Series::ALL.into_iter().filter(|s| s.in_season(today)).filter_map(|series| {
+        Some(TicketOffer {
+            series,
+            price: series.price()?,
+            level: levels::shop_level(series),
+            until: series.season().map(|(_, to)| to),
+        })
+    });
     let cosmetics = Cosmetic::all().into_iter().map(|item| CosmeticOffer { item, origin: item.origin() });
     web::Json(ShopDto { tickets: tickets.collect(), cosmetics: cosmetics.collect() })
 }
@@ -72,6 +81,9 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
     let out = conn
         .transaction(async move |conn| {
             if let Buy::Ticket { series } = &buy {
+                if !series.in_season(Utc::now().date_naive()) {
+                    return Err(ApiError::Conflict("out_of_season"));
+                }
                 let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
                 if levels::level_for(xp) < levels::shop_level(*series) {
                     return Err(ApiError::Conflict("level_too_low"));

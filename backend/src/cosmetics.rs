@@ -73,6 +73,8 @@ catalog!(
         Royal => "royal", Origin::Golden;
         Forest => "forest", Origin::Golden;
         Champion => "champion", trophy("level_10");
+        Spooky => "spooky", trophy("pumpkin_king");
+        Frost => "frost", trophy("snow_champion");
     }
 );
 

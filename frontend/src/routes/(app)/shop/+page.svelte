@@ -113,6 +113,19 @@
 					<div class="what">
 						<h3>{i18n.t(`series.${offer.series}`)}</h3>
 						<p>{i18n.t(`series.${offer.series}.rules`)}</p>
+						{#if offer.until}
+							<span class="season"
+								>⏳ {i18n.t('shop.until', {
+									date: new Date(2000, offer.until[0] - 1, offer.until[1]).toLocaleDateString(
+										i18n.lang,
+										{
+											day: 'numeric',
+											month: 'long'
+										}
+									)
+								})}</span
+							>
+						{/if}
 					</div>
 					{#if session.me.level.level < offer.level}
 						<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
@@ -285,6 +298,16 @@
 	.what h3 {
 		font-size: 17px;
 		color: var(--edge-ink);
+	}
+	.season {
+		display: inline-block;
+		margin-top: 4px;
+		padding: 2px 8px;
+		border-radius: 999px;
+		font-size: 11px;
+		font-weight: 800;
+		background: var(--edge);
+		color: #fff;
 	}
 	.what p {
 		font-size: 13px;

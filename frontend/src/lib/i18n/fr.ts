@@ -425,5 +425,24 @@ export default {
 	'words.yours': 'Vos lettres',
 	'words.pays': '1 mot 30 · 2 mots 100 · 3 mots 400 · 4 mots 2 000 · 5 mots 20 000',
 	'achievement.aquarium': 'Aquarium complet',
-	'achievement.aquarium.how': 'Pêcher toutes les espèces de poissons'
+	'achievement.aquarium.how': 'Pêcher toutes les espèces de poissons',
+
+	'series.pumpkin_patch': 'Champ de Citrouilles',
+	'series.pumpkin_patch.rules':
+		'Comptez les bonbons dans les citrouilles : plus il y en a, plus ça paie',
+	'series.snowball': 'Boule de Neige',
+	'series.snowball.rules':
+		'Votre boule dévale cinq bosses : la neige la grossit, les rochers la réduisent',
+	'pumpkin.total': '{n} bonbons',
+	'pumpkin.pays': '13+ bonbons 40 · 15+ 150 · 17+ 500 · 19+ 2 500 · citrouille dorée +500',
+	'snow.size': 'Taille {n}',
+	'snow.pays': 'Taille 7 : 30 · 8 : 60 · 9 : 150 · 11 : 500 · 13+ : 2 500',
+	'shop.until': 'Jusqu’au {date}',
+	'theme.spooky': 'Frisson',
+	'theme.frost': 'Givre',
+	'achievement.pumpkin_king': 'Roi des citrouilles',
+	'achievement.pumpkin_king.how': 'Gagner 400 pièces ou plus sur un Champ de Citrouilles',
+	'achievement.snow_champion': 'Champion des neiges',
+	'achievement.snow_champion.how': 'Gagner 500 pièces ou plus sur une Boule de Neige',
+	'errors.out_of_season': 'Ce ticket n’est plus de saison.'
 } satisfies Record<keyof typeof en, string>;

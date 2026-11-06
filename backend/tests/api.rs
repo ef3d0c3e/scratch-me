@@ -929,3 +929,26 @@ async fn fish_go_into_the_aquarium() {
     caught.sort();
     assert_eq!(caught, ["golden_koi", "tuna"]);
 }
+
+#[actix_web::test]
+async fn seasonal_tickets_are_sold_in_season_only() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("season");
+    let me = register(&app, &name, "UTC").await;
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    let sold: Vec<&str> = shop["tickets"].as_array().unwrap().iter().map(|t| t["series"].as_str().unwrap()).collect();
+    let today = chrono::Utc::now().date_naive();
+    for (series, key) in [
+        (scratchme_api::tickets::Series::PumpkinPatch, "pumpkin_patch"),
+        (scratchme_api::tickets::Series::Snowball, "snowball"),
+    ] {
+        assert_eq!(sold.contains(&key), series.in_season(today), "{key}");
+        let (status, body) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": key })).await;
+        if series.in_season(today) {
+            assert_eq!(status, 200, "{key}");
+        } else {
+            assert_eq!((status, body["error"].as_str()), (409, Some("out_of_season")), "{key}");
+        }
+    }
+}

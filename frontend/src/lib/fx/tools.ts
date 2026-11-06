@@ -83,5 +83,7 @@ export const THEME_PITCH: Record<ThemeId, number> = {
 	candy: 1.2,
 	arcade: 1.4,
 	forest: 0.8,
-	champion: 1
+	champion: 1,
+	spooky: 0.7,
+	frost: 1.6
 };

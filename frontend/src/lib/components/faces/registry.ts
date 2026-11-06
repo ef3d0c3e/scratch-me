@@ -24,6 +24,8 @@ import HighCardFace from './HighCardFace.svelte';
 import LuckyFace from './LuckyFace.svelte';
 import NumberFace from './NumberFace.svelte';
 import PlinkoFace from './PlinkoFace.svelte';
+import PumpkinFace from './PumpkinFace.svelte';
+import SnowballFace from './SnowballFace.svelte';
 import PushLuckFace from './PushLuckFace.svelte';
 import ReelsFace from './ReelsFace.svelte';
 import RocketFace from './RocketFace.svelte';
@@ -55,7 +57,9 @@ export const SCRATCH_FACES: Partial<Record<Series, Face>> = {
 	board_walk: BoardWalkFace,
 	fishing: FishingFace,
 	word_bank: WordBankFace,
-	word_search: WordSearchFace
+	word_search: WordSearchFace,
+	pumpkin_patch: PumpkinFace,
+	snowball: SnowballFace
 };
 
 export const PLAYED_FACES: Partial<Record<Series, Face>> = {
