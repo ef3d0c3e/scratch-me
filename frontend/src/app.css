@@ -1,0 +1,216 @@
+/* Design tokens and shared controls. Screens keep their layout in their own
+   components. One look for now; themes (SCRAT-17) will swap these tokens. */
+:root {
+	--night: #140b2e;
+	--night-2: #1f1245;
+	--night-3: #2b1a5c;
+	--ink: #fff6e5;
+	--muted: #b9a9d9;
+	--line: rgba(255, 255, 255, 0.12);
+	--gold: #ffc23d;
+	--gold-deep: #e08e0b;
+	--pink: #ff4f8b;
+	--mint: #34e0a1;
+	--sky: #57b8ff;
+	--paper: #fff4dc;
+	--paper-2: #ffe7b8;
+	--paper-ink: #2a1650;
+	--danger: #ff6b6f;
+	--glow: #3d1f86;
+	--gold-shadow: #9a5a00;
+	--pink-shadow: #8a1240;
+	/* The foil: four stops of its sheen, and the words printed on it */
+	--foil-1: #cfcbe0;
+	--foil-2: #a9a3c4;
+	--foil-3: #e9e6f5;
+	--foil-4: #8f89ad;
+	--foil-ink: rgba(70, 55, 120, 0.22);
+	--display: 'Bungee', 'Arial Black', system-ui, sans-serif;
+	--body: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--safe-top: env(safe-area-inset-top, 0px);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	color-scheme: dark;
+}
+
+/* Themes, won or bought (SCRAT-17): each swaps the tokens above */
+:root[data-skin='sunset'] {
+	--night: #2a0f1f;
+	--night-2: #3d1530;
+	--night-3: #5a1f42;
+	--muted: #e3b3c2;
+	--glow: #ff7a45;
+	--gold: #ffb03d;
+	--pink: #ff5e7e;
+	--foil-1: #e8c2a8;
+	--foil-2: #c98f6f;
+	--foil-3: #f6dccb;
+	--foil-4: #a8694a;
+	--foil-ink: rgba(90, 30, 20, 0.25);
+}
+:root[data-skin='mint'] {
+	--night: #06231e;
+	--night-2: #0b332c;
+	--night-3: #11463d;
+	--muted: #9fd3c4;
+	--glow: #1fbf8f;
+	--gold: #ffd166;
+	--pink: #ff6f91;
+	--foil-1: #cfe9df;
+	--foil-2: #9fc9b9;
+	--foil-3: #eef9f4;
+	--foil-4: #7fae9c;
+	--foil-ink: rgba(10, 70, 55, 0.22);
+}
+:root[data-skin='neon'] {
+	--night: #05010f;
+	--night-2: #110726;
+	--night-3: #1d0c3d;
+	--muted: #b3a3ff;
+	--glow: #ff00c8;
+	--gold: #f7ff3c;
+	--gold-deep: #c6cc00;
+	--gold-shadow: #5e6100;
+	--pink: #ff2bd6;
+	--mint: #00ffd5;
+	--line: rgba(255, 43, 214, 0.25);
+	--foil-1: #3a2a6a;
+	--foil-2: #251a4d;
+	--foil-3: #6a4fd0;
+	--foil-4: #140e2e;
+	--foil-ink: rgba(0, 255, 213, 0.35);
+}
+:root[data-skin='royal'] {
+	--night: #0b0e2a;
+	--night-2: #141a45;
+	--night-3: #1e2766;
+	--muted: #aab4e8;
+	--glow: #4f6bff;
+	--gold: #ffd479;
+	--pink: #c9a0ff;
+	--pink-shadow: #4b2a8a;
+	--foil-1: #f3d98b;
+	--foil-2: #c9a24a;
+	--foil-3: #fff1c4;
+	--foil-4: #a07a2a;
+	--foil-ink: rgba(90, 60, 0, 0.3);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+html,
+body {
+	min-height: 100%;
+}
+body {
+	margin: 0;
+	color: var(--ink);
+	font: 16px/1.4 var(--body);
+	background:
+		radial-gradient(120% 60% at 50% -10%, var(--glow) 0%, transparent 60%),
+		radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.06) 1px, transparent 1.5px) 0 0 / 22px
+			22px,
+		var(--night);
+	background-attachment: fixed;
+	-webkit-tap-highlight-color: transparent;
+	overscroll-behavior-y: none;
+}
+button,
+input {
+	font: inherit;
+	color: inherit;
+}
+button {
+	cursor: pointer;
+}
+:focus-visible {
+	outline: 3px solid var(--gold);
+	outline-offset: 2px;
+	border-radius: 8px;
+}
+h1,
+h2,
+h3 {
+	font-family: var(--display);
+	font-weight: 400;
+	line-height: 1.05;
+	margin: 0;
+	text-wrap: balance;
+}
+p {
+	margin: 0;
+}
+a {
+	color: var(--gold);
+}
+.sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+.num {
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 48px;
+	padding: 0 22px;
+	border: 0;
+	border-radius: 999px;
+	font-weight: 700;
+	font-size: 16px;
+	text-decoration: none;
+	background: var(--night-3);
+	color: var(--ink);
+	transition:
+		transform 0.12s ease,
+		filter 0.12s ease;
+}
+.btn:active:not(:disabled) {
+	transform: translateY(2px) scale(0.98);
+}
+.btn:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+.btn.primary {
+	background: linear-gradient(180deg, #ffd66b, var(--gold) 45%, var(--gold-deep));
+	color: #3a1d00;
+	box-shadow:
+		0 4px 0 #9a5a00,
+		0 10px 24px -8px rgba(255, 194, 61, 0.6);
+}
+.btn.primary:active:not(:disabled) {
+	box-shadow:
+		0 2px 0 #9a5a00,
+		0 6px 16px -8px rgba(255, 194, 61, 0.6);
+}
+.btn.ghost {
+	background: transparent;
+	border: 1.5px solid var(--line);
+}
+.btn.small {
+	min-height: 38px;
+	padding: 0 16px;
+	font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}

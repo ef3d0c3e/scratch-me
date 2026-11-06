@@ -1,0 +1,146 @@
+<script lang="ts">
+	import { page } from '$app/state';
+	import type { LayoutProps } from './$types';
+	import { getI18n } from '#lib/i18n/index.svelte.ts';
+	import { setSession } from '#lib/session.svelte.ts';
+	import { setCookie } from '#lib/theme.ts';
+	import Counter from '#lib/components/Counter.svelte';
+	import ScratchSheet from '#lib/components/ScratchSheet.svelte';
+	import Symbol from '#lib/components/Symbol.svelte';
+
+	let { data, children }: LayoutProps = $props();
+	const i18n = getI18n();
+	// svelte-ignore state_referenced_locally
+	const session = setSession(data.me);
+
+	// The theme worn: on the page now, and in a cookie so the server renders it next time
+	$effect(() => {
+		const skin = session.me.theme;
+		document.documentElement.dataset.skin = skin;
+		setCookie('skin', skin);
+	});
+
+	const tabs = [
+		{ href: '/', key: 'nav.lobby', icon: '🎟️' },
+		{ href: '/shop', key: 'nav.shop', icon: '🛍️' }
+	] as const;
+	const left = $derived(
+		session.open ? session.me.tickets.filter((t) => t.id !== session.open?.id).length : 0
+	);
+</script>
+
+<div class="app">
+	<header class="top">
+		<a class="logo" href="/">Scratch<span>-me</span></a>
+		<div class="wallet" aria-label={i18n.t('lobby.coins')}>
+			<span class="coin" aria-hidden="true"><Symbol symbol="coin" label="" /></span>
+			<Counter value={session.me.coins} duration={900} testid="coins" />
+		</div>
+	</header>
+
+	<main>{@render children()}</main>
+
+	<nav class="tabs" aria-label={i18n.t('nav.label')}>
+		{#each tabs as tab (tab.href)}
+			<a
+				href={tab.href}
+				aria-current={page.url.pathname === tab.href ? 'page' : undefined}
+				class:current={page.url.pathname === tab.href}
+			>
+				<span aria-hidden="true">{tab.icon}</span>
+				{i18n.t(tab.key)}
+			</a>
+		{/each}
+	</nav>
+</div>
+
+{#if session.open}
+	{#key session.open.id}
+		<ScratchSheet
+			ticket={session.open}
+			{left}
+			tool={session.me.tool}
+			theme={session.me.theme}
+			onresult={(r) => session.spent(r)}
+			onnext={() => session.scratch()}
+			onclose={() => session.scratch(null)}
+		/>
+	{/key}
+{/if}
+
+<style>
+	.app {
+		max-width: 480px;
+		margin: 0 auto;
+		min-height: 100dvh;
+		display: flex;
+		flex-direction: column;
+		padding: calc(12px + var(--safe-top)) 16px calc(84px + var(--safe-bottom));
+	}
+	main {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+	.top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 20px;
+	}
+	.logo {
+		font: 400 20px/1 var(--display);
+		color: var(--gold);
+		text-shadow: 0 2px 0 var(--gold-shadow);
+		text-decoration: none;
+	}
+	.logo span {
+		color: var(--pink);
+		text-shadow: 0 2px 0 var(--pink-shadow);
+	}
+	.wallet {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 14px 6px 6px;
+		border-radius: 999px;
+		background: var(--night-2);
+		border: 1px solid var(--line);
+		font-weight: 800;
+		font-size: 18px;
+	}
+	.coin {
+		width: 28px;
+		height: 28px;
+	}
+	.tabs {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 20;
+		display: flex;
+		justify-content: center;
+		gap: 8px;
+		padding: 8px 16px calc(8px + var(--safe-bottom));
+		background: color-mix(in srgb, var(--night) 88%, transparent);
+		backdrop-filter: blur(10px);
+		border-top: 1px solid var(--line);
+	}
+	.tabs a {
+		flex: 0 1 200px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 48px;
+		border-radius: 14px;
+		color: var(--muted);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.tabs a.current {
+		color: var(--ink);
+		background: var(--night-3);
+	}
+</style>
