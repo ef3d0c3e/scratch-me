@@ -1,5 +1,7 @@
 # Scratch-me
 
+[![CI](https://github.com/ef3d0c3e/scratch-me/actions/workflows/ci.yml/badge.svg)](https://github.com/ef3d0c3e/scratch-me/actions/workflows/ci.yml)
+
 A scratch-ticket simulator for phone browsers, an offshoot of AnyCardz. Free tickets drop on timers, you scratch them with your finger, and they pay out coins, more tickets or cosmetics. No real money, ever.
 
 - `backend/`: API in Rust, actix-web 4 + Diesel (diesel-async, Postgres). It holds every outcome: a ticket's layout and prize are drawn when it is issued and only sent when it is scratched.
