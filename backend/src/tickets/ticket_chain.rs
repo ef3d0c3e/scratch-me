@@ -12,12 +12,16 @@ pub const PANELS: usize = 6;
 /// How many tickets a chain holds, and how often
 const COUNTS: [(usize, u32); 5] = [(0, 30), (1, 40), (2, 20), (3, 8), (4, 2)];
 /// Which series each one is
-pub const FOUND: [(Series, u32); 5] = [
-    (Series::LuckyThree, 680),
-    (Series::NumberMatch, 220),
-    (Series::CashWheel, 60),
-    (Series::TicketChain, 30),
-    (Series::Golden, 10),
+pub const FOUND: [(Series, u32); 9] = [
+    (Series::LuckyThree, 420),
+    (Series::HighCard, 160),
+    (Series::LuckyReels, 140),
+    (Series::NumberMatch, 120),
+    (Series::Bingo, 70),
+    (Series::CashWheel, 40),
+    (Series::TreasureDig, 20),
+    (Series::TicketChain, 25),
+    (Series::Golden, 5),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

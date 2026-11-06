@@ -29,6 +29,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(player::claim_pocket)
             .service(player::claim_envelope)
             .service(tickets::scratch)
+            .service(tickets::get_dig)
+            .service(tickets::dig)
             .service(shop::list)
             .service(shop::buy)
             .service(shop::equip)

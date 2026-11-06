@@ -103,6 +103,7 @@ diesel::table! {
         source -> Text,
         created_at -> Timestamptz,
         scratched_at -> Nullable<Timestamptz>,
+        picks -> Nullable<Jsonb>,
     }
 }
 

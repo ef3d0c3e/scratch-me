@@ -9,11 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::cosmetics::Cosmetic;
 
+pub mod bingo;
 pub mod cash_wheel;
 pub mod golden;
+pub mod high_card;
+pub mod lucky_reels;
 pub mod lucky_three;
 pub mod number_match;
 pub mod ticket_chain;
+pub mod treasure_dig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -23,11 +27,24 @@ pub enum Series {
     TicketChain,
     CashWheel,
     Golden,
+    HighCard,
+    LuckyReels,
+    Bingo,
+    TreasureDig,
 }
 
 impl Series {
-    pub const ALL: [Series; 5] =
-        [Series::LuckyThree, Series::NumberMatch, Series::TicketChain, Series::CashWheel, Series::Golden];
+    pub const ALL: [Series; 9] = [
+        Series::LuckyThree,
+        Series::HighCard,
+        Series::LuckyReels,
+        Series::Bingo,
+        Series::NumberMatch,
+        Series::CashWheel,
+        Series::TreasureDig,
+        Series::TicketChain,
+        Series::Golden,
+    ];
 
     /// The name stored in the database and sent to the client
     pub fn key(self) -> &'static str {
@@ -37,6 +54,10 @@ impl Series {
             Series::TicketChain => "ticket_chain",
             Series::CashWheel => "cash_wheel",
             Series::Golden => "golden",
+            Series::HighCard => "high_card",
+            Series::LuckyReels => "lucky_reels",
+            Series::Bingo => "bingo",
+            Series::TreasureDig => "treasure_dig",
         }
     }
 
@@ -50,6 +71,10 @@ impl Series {
             Series::LuckyThree => Some(lucky_three::PRICE),
             Series::NumberMatch => Some(number_match::PRICE),
             Series::CashWheel => Some(cash_wheel::PRICE),
+            Series::HighCard => Some(high_card::PRICE),
+            Series::LuckyReels => Some(lucky_reels::PRICE),
+            Series::Bingo => Some(bingo::PRICE),
+            Series::TreasureDig => Some(treasure_dig::PRICE),
             Series::TicketChain | Series::Golden => None,
         }
     }
@@ -62,7 +87,16 @@ impl Series {
             Series::TicketChain => ticket_chain::draw(rng),
             Series::CashWheel => cash_wheel::draw(rng),
             Series::Golden => golden::draw(rng),
+            Series::HighCard => high_card::draw(rng),
+            Series::LuckyReels => lucky_reels::draw(rng),
+            Series::Bingo => bingo::draw(rng),
+            Series::TreasureDig => treasure_dig::draw(rng),
         }
+    }
+
+    /// Played by choosing where to dig, not by scratching all at once
+    pub fn is_dig(self) -> bool {
+        self == Series::TreasureDig
     }
 }
 
@@ -150,7 +184,19 @@ pub(crate) fn measured_value(series: Series, n: usize, rng: &mut impl Rng) -> f6
             Prize::Cosmetic { .. } => crate::cosmetics::DUPLICATE_COINS as f64,
         }
     }
-    (0..n).map(|_| value(&series.draw(rng).prize, 0, rng)).sum::<f64>() / n as f64
+    (0..n)
+        .map(|_| {
+            let drawn = series.draw(rng);
+            let prize = if series.is_dig() {
+                let layout: treasure_dig::Layout = serde_json::from_value(drawn.layout).expect("a beach");
+                treasure_dig::play_blind(&layout, rng)
+            } else {
+                drawn.prize
+            };
+            value(&prize, 0, rng)
+        })
+        .sum::<f64>()
+        / n as f64
 }
 
 #[cfg(test)]

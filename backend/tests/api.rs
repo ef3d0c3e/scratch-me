@@ -691,3 +691,101 @@ async fn profiles_and_titles() {
     let (_, p) = get(&app, &format!("/api/players/{name}"), &other).await;
     assert_eq!(p["title"], "big_win");
 }
+
+fn beach() -> Value {
+    let mut cells = vec![json!({ "kind": "sand" }); 16];
+    cells[0] = json!({ "kind": "chest", "coins": 400 });
+    cells[1] = json!({ "kind": "map" });
+    cells[2] = json!({ "kind": "chest", "coins": 100 });
+    json!({ "cells": cells })
+}
+
+#[actix_web::test]
+async fn treasure_dig_pays_what_the_digs_found() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("dig");
+    let me = register(&app, &name, "UTC").await;
+    let id = known_ticket(&name, "treasure_dig", beach(), json!({ "kind": "nothing" })).await;
+    let uri = format!("/api/tickets/{id}/dig");
+    let dig = |cell: usize| post_json(&app, &uri, &me, json!({ "cell": cell }));
+
+    // It is played by digging, not by scratching
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("dig_ticket")));
+
+    let (status, s) = dig(1).await;
+    assert_eq!(status, 200);
+    assert_eq!(s["dug"], json!([{ "cell": 1, "spot": { "kind": "map" } }]));
+    assert_eq!(s["digs_left"], 4, "the map gives one more");
+    assert_eq!(s["done"], Value::Null);
+    // Nothing of the rest of the beach leaks
+    assert!(s.get("layout").is_none());
+    let (status, body) = dig(1).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("dug_already")));
+    let (status, _) = dig(16).await;
+    assert_eq!(status, 409);
+
+    // Leave and come back: the digs are kept
+    let (_, again) = get(&app, &format!("/api/tickets/{id}/dig"), &me).await;
+    assert_eq!(again["digs_left"], 4);
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert!(me_body["tickets"].as_array().unwrap().iter().any(|t| t["id"] == id), "still in the stack");
+
+    dig(0).await;
+    dig(5).await;
+    dig(6).await;
+    let (status, last) = dig(7).await;
+    assert_eq!(status, 200);
+    assert_eq!(last["digs_left"], 0);
+    let done = &last["done"];
+    assert_eq!(done["prize"], json!({ "kind": "coins", "amount": 400 }));
+    assert_eq!(done["coins"], STARTING_COINS + 400);
+    assert_eq!(done["layout"], beach(), "the whole beach, to see what was missed");
+    let (status, _) = dig(8).await;
+    assert_eq!(status, 404, "over");
+}
+
+#[actix_web::test]
+async fn two_digs_at_once_take_turns() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("race");
+    let me = register(&app, &name, "UTC").await;
+    let id = known_ticket(&name, "treasure_dig", beach(), json!({ "kind": "nothing" })).await;
+    let uri = format!("/api/tickets/{id}/dig");
+    let (a, b) = tokio::join!(
+        post_json(&app, &uri, &me, json!({ "cell": 0 })),
+        post_json(&app, &uri, &me, json!({ "cell": 0 }))
+    );
+    let mut statuses = [a.0, b.0];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409]);
+}
+
+#[actix_web::test]
+async fn new_series_open_with_levels() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("lvl");
+    let me = register(&app, &name, "UTC").await;
+    let buy =
+        |series: &'static str| post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": series }));
+    assert_eq!(buy("high_card").await.0, 409, "level 2");
+    set_xp(&name, 100).await;
+    let (status, body) = buy("high_card").await;
+    assert_eq!((status, body["ticket"]["series"].as_str()), (200, Some("high_card")));
+    assert_eq!(buy("treasure_dig").await.0, 409, "level 6");
+    set_xp(&name, 1500).await;
+    set_coins(&name, 1000).await;
+    let (status, body) = buy("treasure_dig").await;
+    assert_eq!((status, body["ticket"]["series"].as_str()), (200, Some("treasure_dig")));
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    let levels: Vec<(String, i64)> = shop["tickets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| (t["series"].as_str().unwrap().to_owned(), t["level"].as_i64().unwrap()))
+        .collect();
+    assert!(levels.contains(&("bingo".into(), 4)) && levels.contains(&("lucky_reels".into(), 2)));
+}

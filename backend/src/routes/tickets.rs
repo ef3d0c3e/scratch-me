@@ -1,6 +1,6 @@
 //! Issuing and scratching tickets
 
-use actix_web::{post, web};
+use actix_web::{get, post, web};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
@@ -13,6 +13,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::pocket;
 use crate::progress::{self, Event, Progress, Scratch};
 use crate::schema::{cosmetics, tickets, users};
+use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
 use crate::tickets::{Prize, Series, Source};
 
 /// An unscratched ticket, as the player sees it: no layout, no prize
@@ -164,7 +165,8 @@ pub async fn scratch(
                 tickets::table
                     .filter(tickets::id.eq(id))
                     .filter(tickets::user_id.eq(uid))
-                    .filter(tickets::scratched_at.is_null()),
+                    .filter(tickets::scratched_at.is_null())
+                    .filter(tickets::series.ne(Series::TreasureDig.key())),
             )
             .set(tickets::scratched_at.eq(Utc::now()))
             .returning((tickets::series, tickets::layout, tickets::prize))
@@ -177,10 +179,14 @@ pub async fn scratch(
                 ))
                 .get_result(conn)
                 .await?;
-                return Err(if exists {
-                    ApiError::Conflict("already_scratched")
+                if !exists {
+                    return Err(ApiError::NotFound("ticket"));
+                }
+                let series: String = tickets::table.find(id).select(tickets::series).first(conn).await?;
+                return Err(if series == Series::TreasureDig.key() {
+                    ApiError::Invalid("dig_ticket")
                 } else {
-                    ApiError::NotFound("ticket")
+                    ApiError::Conflict("already_scratched")
                 });
             };
             let prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
@@ -206,6 +212,133 @@ pub async fn scratch(
         let extra = if out.duplicate { DUPLICATE_COINS } else { 0 };
         let s = Scratch::of(series, &out.layout, &out.prize, extra);
         crate::live::broadcast(&state.live, &user.username, Some((series, &s, &out.prize)), &out.progress.achievements);
+    }
+    Ok(web::Json(out))
+}
+
+#[derive(Debug, Serialize)]
+pub struct Dug {
+    pub cell: usize,
+    pub spot: Spot,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DigState {
+    pub dug: Vec<Dug>,
+    pub digs_left: usize,
+    /// The last dig: the whole beach and the prize, as a scratch answers
+    pub done: Option<Scratched>,
+}
+
+fn dig_state(layout: &DigLayout, picks: &[usize]) -> DigState {
+    DigState {
+        dug: picks.iter().map(|&cell| Dug { cell, spot: layout.cells[cell] }).collect(),
+        digs_left: treasure_dig::digs_allowed(layout, picks).saturating_sub(picks.len()),
+        done: None,
+    }
+}
+
+fn parse_picks(picks: Option<serde_json::Value>) -> ApiResult<Vec<usize>> {
+    Ok(picks.map(serde_json::from_value).transpose().map_err(|e| ApiError::Internal(e.into()))?.unwrap_or_default())
+}
+
+/// A Treasure Dig in play: what was dug so far
+#[get("/tickets/{id}/dig")]
+pub async fn get_dig(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    path: web::Path<i64>,
+) -> ApiResult<web::Json<DigState>> {
+    let id = path.into_inner();
+    let mut conn = state.pool.get().await?;
+    let row: Option<(serde_json::Value, Option<serde_json::Value>)> = tickets::table
+        .filter(tickets::id.eq(id))
+        .filter(tickets::user_id.eq(user.id))
+        .filter(tickets::scratched_at.is_null())
+        .filter(tickets::series.eq(Series::TreasureDig.key()))
+        .select((tickets::layout, tickets::picks))
+        .first(&mut conn)
+        .await
+        .optional()?;
+    let (layout, picks) = row.ok_or(ApiError::NotFound("ticket"))?;
+    let layout: DigLayout = serde_json::from_value(layout).map_err(|e| ApiError::Internal(e.into()))?;
+    Ok(web::Json(dig_state(&layout, &parse_picks(picks)?)))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct DigBody {
+    cell: usize,
+}
+
+/// Digs one spot. The last dig pays what the digs found.
+#[post("/tickets/{id}/dig")]
+pub async fn dig(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    path: web::Path<i64>,
+    body: web::Json<DigBody>,
+) -> ApiResult<web::Json<DigState>> {
+    let id = path.into_inner();
+    let cell = body.into_inner().cell;
+    let uid = user.id;
+    let mut conn = state.pool.get().await?;
+    let out = conn
+        .transaction(async move |conn| {
+            // The row lock: two digs at once take turns
+            let row: Option<(serde_json::Value, Option<serde_json::Value>)> = tickets::table
+                .filter(tickets::id.eq(id))
+                .filter(tickets::user_id.eq(uid))
+                .filter(tickets::scratched_at.is_null())
+                .filter(tickets::series.eq(Series::TreasureDig.key()))
+                .select((tickets::layout, tickets::picks))
+                .for_update()
+                .first(conn)
+                .await
+                .optional()?;
+            let (raw, picks) = row.ok_or(ApiError::NotFound("ticket"))?;
+            let layout: DigLayout = serde_json::from_value(raw.clone()).map_err(|e| ApiError::Internal(e.into()))?;
+            let mut picks = parse_picks(picks)?;
+            treasure_dig::can_dig(&layout, &picks, cell).map_err(ApiError::Conflict)?;
+            picks.push(cell);
+            let mut out = dig_state(&layout, &picks);
+            let picks_json = serde_json::to_value(&picks).expect("picks serialize");
+            if !treasure_dig::finished(&layout, &picks) {
+                diesel::update(tickets::table.find(id)).set(tickets::picks.eq(picks_json)).execute(conn).await?;
+                return Ok::<_, ApiError>(out);
+            }
+            let prize = treasure_dig::prize(&layout, &picks);
+            diesel::update(tickets::table.find(id))
+                .set((
+                    tickets::picks.eq(picks_json),
+                    tickets::prize.eq(serde_json::to_value(&prize).expect("prize serializes")),
+                    tickets::scratched_at.eq(Utc::now()),
+                ))
+                .execute(conn)
+                .await?;
+            let g = grant(conn, uid, &prize, Source::Prize).await?;
+            let event = Event::Scratched(Scratch::of(Series::TreasureDig, &raw, &prize, 0));
+            let progress = progress::apply(conn, uid, &[event]).await?;
+            out.done = Some(Scratched {
+                id,
+                series: Series::TreasureDig.key().to_owned(),
+                layout: raw,
+                prize,
+                coins: progress.coins,
+                tickets: g.tickets,
+                duplicate: false,
+                progress,
+            });
+            Ok(out)
+        })
+        .await?;
+    if let Some(done) = &out.done {
+        let s = Scratch::of(Series::TreasureDig, &done.layout, &done.prize, 0);
+        crate::live::broadcast(
+            &state.live,
+            &user.username,
+            Some((Series::TreasureDig, &s, &done.prize)),
+            &done.progress.achievements,
+        );
     }
     Ok(web::Json(out))
 }
