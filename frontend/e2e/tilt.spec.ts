@@ -3,12 +3,12 @@ import { newPlayer, scratchAll } from './helpers';
 
 /** The shine layer as an image, to compare before and after */
 const sheen = (page: Page) =>
-	page.locator('canvas.sheen').evaluate((c: HTMLCanvasElement) => c.toDataURL());
+	page.locator('.play canvas.sheen').evaluate((c: HTMLCanvasElement) => c.toDataURL());
 
 /** Alpha of the shine at a point of the foil, 0–1 from its left/top */
 const sheenAlpha = (page: Page, fx: number, fy: number) =>
 	page
-		.locator('canvas.sheen')
+		.locator('.play canvas.sheen')
 		.evaluate(
 			(c: HTMLCanvasElement, [fx, fy]) =>
 				c.getContext('2d')!.getImageData(Math.floor(c.width * fx), Math.floor(c.height * fy), 1, 1)
@@ -54,7 +54,7 @@ test('the shine stays still without input when motion is reduced', async ({ page
 test('the mouse moves the shine on a computer', async ({ page, isMobile }) => {
 	test.skip(isMobile, 'mouse hover on desktop');
 	await openTicket(page);
-	const box = (await page.locator('canvas.scratch').boundingBox())!;
+	const box = (await page.locator('.play canvas.scratch').boundingBox())!;
 	await page.mouse.move(box.x + 10, box.y + 10);
 	await page.waitForTimeout(600);
 	const corner = await sheen(page);

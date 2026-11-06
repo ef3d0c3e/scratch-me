@@ -33,10 +33,7 @@ pub struct Scratch {
 impl Scratch {
     /// What a scratch was, from the ticket's series, layout and prize
     pub fn of(series: Series, layout: &serde_json::Value, prize: &Prize, duplicate_coins: i64) -> Scratch {
-        let coins = match prize {
-            Prize::Coins { amount } => *amount,
-            _ => duplicate_coins,
-        };
+        let coins = prize.coins() + duplicate_coins;
         let wheel = (series == Series::CashWheel)
             .then(|| {
                 let base = layout["base"].as_i64()?;

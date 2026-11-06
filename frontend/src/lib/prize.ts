@@ -26,8 +26,18 @@ export function prizeText(i18n: I18n, p: Prize): string {
 			return i18n.t('scratch.prize.pocket_refill');
 		case 'cosmetic':
 			return i18n.t(cosmeticKey(p.item));
+		case 'bundle':
+			return p.items.map((x) => prizeText(i18n, x)).join(' + ');
 	}
 }
+
+/** Coins a prize pays, bundled ones included */
+export const prizeCoins = (p: Prize): number =>
+	p.kind === 'coins'
+		? p.amount
+		: p.kind === 'bundle'
+			? p.items.reduce((n, x) => n + prizeCoins(x), 0)
+			: 0;
 
 /** An achievement's name, or its id when the dictionary does not know it */
 export const achievementName = (i18n: I18n, id: string) =>

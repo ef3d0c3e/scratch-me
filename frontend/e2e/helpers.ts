@@ -64,7 +64,7 @@ export async function setQuests(username: string, quests: [string, number][]) {
 
 /** Drags across the foil row by row, like a finger, from `from` to `to` of its height */
 export async function scratchAll(page: Page, from = 0, to = 1) {
-	const foil = page.getByRole('dialog').locator('canvas.scratch');
+	const foil = page.getByRole('dialog').locator('.play canvas.scratch');
 	const box = (await foil.boundingBox())!;
 	expect(box.width).toBeGreaterThan(100);
 	for (let y = box.y + box.height * from + 10; y < box.y + box.height * to; y += 18) {

@@ -12,6 +12,11 @@ export type Series =
 	| 'lucky_dice'
 	| 'derby'
 	| 'plinko'
+	| 'push_luck'
+	| 'safe_cracker'
+	| 'mystery_boxes'
+	| 'defuse_bomb'
+	| 'rocket'
 	| 'ticket_chain'
 	| 'golden';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
@@ -139,7 +144,17 @@ export type Prize =
 	| { kind: 'ticket'; series: Series }
 	| { kind: 'tickets'; series: Series[] }
 	| { kind: 'pocket_refill' }
-	| { kind: 'cosmetic'; item: Cosmetic };
+	| { kind: 'cosmetic'; item: Cosmetic }
+	| { kind: 'bundle'; items: Prize[] };
+
+/** A ticket's bonus box: its coins multiplied, or one more ticket */
+export type Bonus = { kind: 'times'; times: number } | { kind: 'ticket'; series: Series };
+
+/** A ticket played move by move: what may be seen, and the end when it comes */
+export interface PlayState<V = Record<string, unknown>> {
+	view: V;
+	done: Scratched | null;
+}
 
 export type LuckySymbol = 'gem' | 'coin' | 'clover' | 'ticket' | 'hourglass' | 'star';
 

@@ -24,6 +24,11 @@ export function tier(prize: Prize): Tier {
 		// Something to wear: always a big moment
 		case 'cosmetic':
 			return 'big';
+		// As loud as the coins in it, and never quieter than a cheer
+		case 'bundle': {
+			const coins = prize.items.reduce((n, p) => n + (p.kind === 'coins' ? p.amount : 0), 0);
+			return coins >= JACKPOT_AT ? 'jackpot' : coins >= BIG_AT ? 'big' : 'small';
+		}
 	}
 }
 

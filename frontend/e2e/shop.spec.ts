@@ -48,7 +48,7 @@ test('a tool in use shows under the finger while scratching', async ({ page }) =
 	await page.getByRole('link', { name: /Lobby/ }).click();
 	await page.getByRole('button', { name: 'Take' }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
-	const box = (await page.locator('canvas.scratch').boundingBox())!;
+	const box = (await page.locator('.play canvas.scratch').boundingBox())!;
 	await page.mouse.move(box.x + 40, box.y + 40);
 	await page.mouse.down();
 	await page.mouse.move(box.x + 120, box.y + 60, { steps: 4 });

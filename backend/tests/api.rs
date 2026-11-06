@@ -836,3 +836,76 @@ async fn foils_are_worn_and_trophy_items_are_earned_not_bought() {
     let (status, _) = post_json(&app, "/api/cosmetics/equip", &me, json!({ "item": shovel })).await;
     assert_eq!(status, 200, "the shovel is theirs");
 }
+
+#[actix_web::test]
+async fn played_tickets_go_move_by_move() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("play");
+    let me = register(&app, &name, "UTC").await;
+    let layout = json!({ "wires": ["dud", "boom", "dud", "defuse", "dud", "dud"], "coins": 400 });
+    let id = known_ticket(&name, "defuse_bomb", layout.clone(), json!({ "kind": "nothing" })).await;
+    let uri = format!("/api/tickets/{id}/play");
+
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("played_ticket")));
+
+    let (status, look) = get(&app, &uri, &me).await;
+    assert_eq!(status, 200);
+    assert_eq!(look["view"]["coins"], 400);
+    assert!(look["view"]["wires"].is_null(), "hidden while it is going");
+    assert!(look["view"]["ms_left"].as_i64().unwrap() > 19_000);
+
+    let (status, body) = post_json(&app, &uri, &me, json!({ "move": { "cut": 0 } })).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["view"]["cut"], json!([{ "wire": 0, "is": "dud" }]));
+    assert_eq!(body["done"], Value::Null);
+    let (status, body) = post_json(&app, &uri, &me, json!({ "move": { "cut": 0 } })).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("cut_already")));
+    let (status, body) = post_json(&app, &uri, &me, json!({ "move": { "nonsense": true } })).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("bad_move")));
+
+    let (status, body) = post_json(&app, &uri, &me, json!({ "move": { "cut": 3 } })).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 400 }));
+    assert_eq!(body["done"]["coins"], STARTING_COINS + 400);
+    assert_eq!(body["view"]["wires"], layout["wires"], "everything shows at the end");
+    assert_eq!(get(&app, &uri, &me).await.0, 404, "over");
+}
+
+#[actix_web::test]
+async fn rocket_pays_what_the_server_measured() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("rocket");
+    let me = register(&app, &name, "UTC").await;
+    let id = known_ticket(&name, "rocket", json!({ "crash": 40.0 }), json!({ "kind": "nothing" })).await;
+    let uri = format!("/api/tickets/{id}/play");
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "kind": "cash" } })).await;
+    assert_eq!(body["error"], "launch_first");
+    post_json(&app, &uri, &me, json!({ "move": { "kind": "launch" } })).await;
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "kind": "cash" } })).await;
+    // Cashed at once: about the stake back
+    let won = body["done"]["prize"]["amount"].as_i64().unwrap();
+    assert!((100..=110).contains(&won), "{won}");
+}
+
+#[actix_web::test]
+async fn a_bonus_bundle_pays_coins_and_a_ticket() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("bonus");
+    let me = register(&app, &name, "UTC").await;
+    let prize = json!({ "kind": "bundle", "items": [
+        { "kind": "coins", "amount": 50 },
+        { "kind": "ticket", "series": "lucky_three" }
+    ] });
+    let layout =
+        json!({ "cells": vec!["clover"; 9], "win": "clover", "bonus": { "kind": "ticket", "series": "lucky_three" } });
+    let id = known_ticket(&name, "lucky_three", layout, prize.clone()).await;
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["prize"], prize);
+    assert_eq!(body["coins"], STARTING_COINS + 50);
+    assert_eq!(body["tickets"][0]["series"], "lucky_three");
+}

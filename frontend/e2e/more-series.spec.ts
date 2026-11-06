@@ -99,7 +99,7 @@ test('a foil bought and worn covers the tickets', async ({ page }) => {
 	await page.waitForTimeout(400);
 	// The foil's middle is gold, not silver
 	const [r, g, b] = await page
-		.locator('canvas.scratch')
+		.locator('.play canvas.scratch')
 		.evaluate((c: HTMLCanvasElement) => [
 			...c.getContext('2d')!.getImageData(5, c.height / 2, 1, 1).data
 		]);

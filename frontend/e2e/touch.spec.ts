@@ -5,7 +5,7 @@ const OUTCOME = /coins!|Another ticket!|Pocket refilled!|Not this time/;
 
 /** Rubs a finger (real touch events) over the top half of the first square */
 async function rubHalfOfFirstSquare(page: Page) {
-	const box = (await page.locator('canvas.scratch').boundingBox())!;
+	const box = (await page.locator('.play canvas.scratch').boundingBox())!;
 	const cdp = await page.context().newCDPSession(page);
 	const touch = (type: string, x = 0, y = 0) =>
 		cdp.send('Input.dispatchTouchEvent', {

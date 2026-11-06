@@ -12,7 +12,7 @@ pub const HANDS: usize = 4;
 pub const LOW: u8 = 2;
 pub const HIGH: u8 = 14;
 
-pub const LABELS: [(i64, u32); 6] = [(5, 400), (10, 300), (20, 180), (50, 80), (200, 30), (500, 10)];
+pub const LABELS: [(i64, u32); 6] = [(5, 400), (10, 300), (20, 180), (50, 80), (200, 30), (500, 5)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

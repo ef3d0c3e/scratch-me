@@ -2,45 +2,17 @@
 	import { onMount } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { post } from '#lib/api.ts';
-	import type {
-		ChainLayout,
-		BingoLayout,
-		DerbyLayout,
-		DiceLayout,
-		PlinkoLayout,
-		TicTacToeLayout,
-		GoldenLayout,
-		HighCardLayout,
-		ReelsLayout,
-		LuckyLayout,
-		NumberLayout,
-		Scratched,
-		FoilId,
-		ThemeId,
-		TicketDto,
-		ToolId,
-		WheelLayout
-	} from '#lib/types.ts';
+	import type { Bonus, FoilId, Scratched, ThemeId, TicketDto, ToolId } from '#lib/types.ts';
 	import { show, tier as tierOf } from '#lib/fx/celebrate.ts';
+	import { prizeCoins, prizeText } from '#lib/prize.ts';
 	import { getFx } from '#lib/fx/fx.svelte.ts';
 	import { THEME_PITCH, TOOLS } from '#lib/fx/tools.ts';
-	import { FOIL_GRID, SERIES_LOOK, cosmeticKey, isDig } from '#lib/series.ts';
-	import BingoFace from './faces/BingoFace.svelte';
-	import DerbyFace from './faces/DerbyFace.svelte';
-	import DiceFace from './faces/DiceFace.svelte';
-	import PlinkoFace from './faces/PlinkoFace.svelte';
-	import TicTacToeFace from './faces/TicTacToeFace.svelte';
-	import HighCardFace from './faces/HighCardFace.svelte';
-	import ReelsFace from './faces/ReelsFace.svelte';
-	import TreasureFace from './faces/TreasureFace.svelte';
+	import { FOIL_GRID, SERIES_LOOK, cosmeticKey, isPlayed } from '#lib/series.ts';
+	import { PLAYED_FACES, SCRATCH_FACES } from './faces/registry.ts';
+	import BonusBox from './BonusBox.svelte';
 	import Celebration from './Celebration.svelte';
 	import Counter from './Counter.svelte';
 	import ScratchFoil from './ScratchFoil.svelte';
-	import ChainFace from './faces/ChainFace.svelte';
-	import GoldenFace from './faces/GoldenFace.svelte';
-	import LuckyFace from './faces/LuckyFace.svelte';
-	import NumberFace from './faces/NumberFace.svelte';
-	import WheelFace from './faces/WheelFace.svelte';
 
 	/**
 	 * One ticket, full screen. The server uncovers it as the sheet opens (the
@@ -88,7 +60,7 @@
 
 	onMount(() => {
 		// A dig ticket is played spot by spot: its face asks the server itself
-		if (!isDig(ticket.series)) scratch();
+		if (!isPlayed(ticket.series)) scratch();
 		// The page behind must not scroll while scratching
 		const overflow = document.body.style.overflow;
 		document.body.style.overflow = 'hidden';
@@ -155,17 +127,28 @@
 	}
 
 	const look = $derived(SERIES_LOOK[ticket.series]);
+	const ScratchFace = $derived(SCRATCH_FACES[ticket.series]);
+	const PlayedFace = $derived(PLAYED_FACES[ticket.series]);
+	/** The bonus box, once the ticket is uncovered (the server sends it with the layout) */
+	const bonus = $derived((result?.layout as { bonus?: Bonus } | undefined)?.bonus ?? null);
 	const grid = $derived(FOIL_GRID[ticket.series]);
 	const win = $derived(result && result.prize.kind !== 'nothing');
 	const tier = $derived(result ? tierOf(result.prize) : 'none');
 	const s = $derived(show(tier));
 	/** The words around the counting number: "+", " coins!" */
+	/** Coins the prize pays, bundled ones included */
+	const coinsWon = $derived(result ? prizeCoins(result.prize) : 0);
 	const coinWords = $derived(i18n.t('scratch.prize.coins', { n: '\u0000' }).split('\u0000'));
 	const voice = $derived({ pitch: TOOLS[tool].pitch * THEME_PITCH[theme], q: TOOLS[tool].q });
 
 	const sub = $derived.by(() => {
 		if (!result) return '';
 		const p = result.prize;
+		if (p.kind === 'bundle')
+			return p.items
+				.filter((x) => x.kind !== 'coins')
+				.map((x) => '+ ' + prizeText(i18n, x))
+				.join(' ');
 		if (p.kind === 'tickets') return p.series.map((x) => i18n.t(`series.${x}`)).join(' · ');
 		if (p.kind === 'cosmetic')
 			return result.duplicate
@@ -217,107 +200,34 @@
 		<div class="head">
 			<h2>{i18n.t(`series.${ticket.series}`)}</h2>
 		</div>
-		{#if ticket.series === 'lucky_three'}
-			<LuckyFace
-				layout={result?.layout as LuckyLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'number_match'}
-			<NumberFace
-				layout={result?.layout as NumberLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'ticket_chain'}
-			<ChainFace
-				layout={result?.layout as ChainLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'cash_wheel'}
-			<WheelFace
-				layout={result?.layout as WheelLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-				ontick={() => fx.tick()}
-			/>
-		{:else if ticket.series === 'high_card'}
-			<HighCardFace
-				layout={result?.layout as HighCardLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'lucky_reels'}
-			<ReelsFace
-				layout={result?.layout as ReelsLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'bingo'}
-			<BingoFace
-				layout={result?.layout as BingoLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'tic_tac_toe'}
-			<TicTacToeFace
-				layout={result?.layout as TicTacToeLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'lucky_dice'}
-			<DiceFace
-				layout={result?.layout as DiceLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'derby'}
-			<DerbyFace
-				layout={result?.layout as DerbyLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-			/>
-		{:else if ticket.series === 'plinko'}
-			<PlinkoFace
-				layout={result?.layout as PlinkoLayout | null}
-				{revealed}
-				foil={cover}
-				onsettled={settle}
-				ontick={() => fx.tick()}
-			/>
-		{:else if ticket.series === 'treasure_dig'}
-			<TreasureFace
+		{#if PlayedFace}
+			<PlayedFace
 				{ticket}
 				{tool}
 				{foil}
 				ondone={dug}
-				onerror={(e) => (error = i18n.error(e))}
+				onerror={(e: unknown) => (error = i18n.error(e))}
 				onscratchstart={() => fx.unlock()}
-				onscratch={(speed) => fx.scratch(speed, voice.pitch, voice.q)}
+				onscratch={(speed: number) => fx.scratch(speed, voice.pitch, voice.q)}
 				onscratchend={() => fx.scratchStop()}
-				onfind={(spot) => {
+				onfind={(spot: { kind: string }) => {
 					fx.scratchStop();
 					if (spot.kind !== 'sand') fx.win('small');
 				}}
+				onbeat={(good: boolean) => (good ? fx.win('small') : fx.win('none'))}
+				ontick={() => fx.tick()}
 			/>
-		{:else}
-			<GoldenFace
-				layout={result?.layout as GoldenLayout | null}
+		{:else if ScratchFace}
+			<ScratchFace
+				layout={result?.layout ?? null}
 				{revealed}
 				foil={cover}
 				onsettled={settle}
+				ontick={() => fx.tick()}
 			/>
+		{/if}
+		{#if bonus}
+			<BonusBox {bonus} {revealed} {tool} {foil} />
 		{/if}
 	</article>
 
@@ -326,12 +236,8 @@
 			<p class="err" role="alert">{error}</p>
 		{:else if settled && result}
 			<p class="title" class:win data-tier={tier}>
-				{#if result.prize.kind === 'coins'}
-					{coinWords[0]}<Counter
-						value={result.prize.amount}
-						from={0}
-						duration={s.count}
-					/>{coinWords[1]}
+				{#if result.prize.kind === 'coins' || (result.prize.kind === 'bundle' && coinsWon > 0)}
+					{coinWords[0]}<Counter value={coinsWon} from={0} duration={s.count} />{coinWords[1]}
 				{:else if result.prize.kind === 'tickets'}
 					{i18n.t('scratch.prize.tickets', { n: result.prize.series.length })}
 				{:else if result.prize.kind === 'cosmetic'}
@@ -343,7 +249,11 @@
 			<p class="sub">{sub}</p>
 		{:else if !revealed}
 			<p class="hint">
-				{isDig(ticket.series) ? i18n.t('treasure.hint') : i18n.t('scratch.hint')}
+				{ticket.series === 'treasure_dig'
+					? i18n.t('treasure.hint')
+					: isPlayed(ticket.series)
+						? ''
+						: i18n.t('scratch.hint')}
 			</p>
 		{/if}
 	</div>
@@ -351,7 +261,7 @@
 	<footer>
 		{#if error}
 			<button type="button" class="btn primary" onclick={onclose}>{i18n.t('scratch.done')}</button>
-		{:else if !revealed && isDig(ticket.series)}
+		{:else if !revealed && isPlayed(ticket.series)}
 			<!-- No reveal all: the player chooses where to dig -->
 		{:else if !revealed}
 			<button type="button" class="btn ghost" disabled={!result} onclick={reveal}

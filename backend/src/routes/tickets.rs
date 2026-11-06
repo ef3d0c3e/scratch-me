@@ -13,6 +13,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::pocket;
 use crate::progress::{self, Event, Progress, Scratch};
 use crate::schema::{cosmetics, tickets, users};
+use crate::tickets::play;
 use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
 use crate::tickets::{Prize, Series, Source};
 
@@ -87,6 +88,17 @@ pub(crate) async fn grant(
     prize: &Prize,
     source: Source,
 ) -> ApiResult<Granted> {
+    let Prize::Bundle { items } = prize else { return grant_one(conn, user_id, prize, source).await };
+    let mut out = Granted { tickets: vec![], duplicate: false };
+    for item in items {
+        let g = grant_one(conn, user_id, item, source).await?;
+        out.tickets.extend(g.tickets);
+        out.duplicate |= g.duplicate;
+    }
+    Ok(out)
+}
+
+async fn grant_one(conn: &mut AsyncPgConnection, user_id: i64, prize: &Prize, source: Source) -> ApiResult<Granted> {
     let add = async |conn: &mut AsyncPgConnection, amount: i64| -> ApiResult<i64> {
         Ok(diesel::update(users::table.find(user_id))
             .set(users::coins.eq(users::coins + amount))
@@ -129,6 +141,8 @@ pub(crate) async fn grant(
             duplicate = !added;
             add(conn, if added { 0 } else { DUPLICATE_COINS }).await?
         }
+        // Flattened by `grant`
+        Prize::Bundle { .. } => add(conn, 0).await?,
     };
     Ok(Granted { tickets, duplicate })
 }
@@ -166,7 +180,8 @@ pub async fn scratch(
                     .filter(tickets::id.eq(id))
                     .filter(tickets::user_id.eq(uid))
                     .filter(tickets::scratched_at.is_null())
-                    .filter(tickets::series.ne(Series::TreasureDig.key())),
+                    .filter(tickets::series.ne(Series::TreasureDig.key()))
+                    .filter(diesel::dsl::not(tickets::series.eq_any(play::GAMES.iter().map(|s| s.key())))),
             )
             .set(tickets::scratched_at.eq(Utc::now()))
             .returning((tickets::series, tickets::layout, tickets::prize))
@@ -183,8 +198,11 @@ pub async fn scratch(
                     return Err(ApiError::NotFound("ticket"));
                 }
                 let series: String = tickets::table.find(id).select(tickets::series).first(conn).await?;
+                let played = Series::parse(&series).is_some_and(|s| s.is_played());
                 return Err(if series == Series::TreasureDig.key() {
                     ApiError::Invalid("dig_ticket")
+                } else if played {
+                    ApiError::Invalid("played_ticket")
                 } else {
                     ApiError::Conflict("already_scratched")
                 });
@@ -307,38 +325,127 @@ pub async fn dig(
                 return Ok::<_, ApiError>(out);
             }
             let prize = treasure_dig::prize(&layout, &picks);
-            diesel::update(tickets::table.find(id))
-                .set((
-                    tickets::picks.eq(picks_json),
-                    tickets::prize.eq(serde_json::to_value(&prize).expect("prize serializes")),
-                    tickets::scratched_at.eq(Utc::now()),
-                ))
-                .execute(conn)
-                .await?;
-            let g = grant(conn, uid, &prize, Source::Prize).await?;
-            let event = Event::Scratched(Scratch::of(Series::TreasureDig, &raw, &prize, 0));
-            let progress = progress::apply(conn, uid, &[event]).await?;
-            out.done = Some(Scratched {
-                id,
-                series: Series::TreasureDig.key().to_owned(),
-                layout: raw,
-                prize,
-                coins: progress.coins,
-                tickets: g.tickets,
-                duplicate: false,
-                progress,
-            });
+            out.done = Some(finish(conn, uid, id, Series::TreasureDig, raw, picks_json, prize).await?);
             Ok(out)
         })
         .await?;
     if let Some(done) = &out.done {
-        let s = Scratch::of(Series::TreasureDig, &done.layout, &done.prize, 0);
-        crate::live::broadcast(
-            &state.live,
-            &user.username,
-            Some((Series::TreasureDig, &s, &done.prize)),
-            &done.progress.achievements,
-        );
+        announce(&state, &user.username, Series::TreasureDig, done);
     }
     Ok(web::Json(out))
+}
+
+/// Ends a ticket played move by move: its prize is now known and paid
+async fn finish(
+    conn: &mut AsyncPgConnection,
+    uid: i64,
+    id: i64,
+    series: Series,
+    layout: serde_json::Value,
+    state: serde_json::Value,
+    prize: Prize,
+) -> ApiResult<Scratched> {
+    diesel::update(tickets::table.find(id))
+        .set((
+            tickets::picks.eq(state),
+            tickets::prize.eq(serde_json::to_value(&prize).expect("prize serializes")),
+            tickets::scratched_at.eq(Utc::now()),
+        ))
+        .execute(conn)
+        .await?;
+    let g = grant(conn, uid, &prize, Source::Prize).await?;
+    let event = Event::Scratched(Scratch::of(series, &layout, &prize, 0));
+    let progress = progress::apply(conn, uid, &[event]).await?;
+    Ok(Scratched {
+        id,
+        series: series.key().to_owned(),
+        layout,
+        prize,
+        coins: progress.coins,
+        tickets: g.tickets,
+        duplicate: false,
+        progress,
+    })
+}
+
+/// Tells everyone about a finished ticket worth it, once committed
+fn announce(state: &AppState, user: &str, series: Series, done: &Scratched) {
+    let s = Scratch::of(series, &done.layout, &done.prize, 0);
+    crate::live::broadcast(&state.live, user, Some((series, &s, &done.prize)), &done.progress.achievements);
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlayState {
+    /// What the player may see now
+    pub view: serde_json::Value,
+    /// The game is over: the whole layout and the prize, as a scratch answers
+    pub done: Option<Scratched>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct PlayBody {
+    #[serde(rename = "move")]
+    mv: serde_json::Value,
+}
+
+/// A look (no move) or a move at a ticket played move by move
+async fn play_ticket(
+    state: &AppState,
+    user: &CurrentUser,
+    id: i64,
+    mv: Option<serde_json::Value>,
+) -> ApiResult<(Series, PlayState)> {
+    let uid = user.id;
+    let mut conn = state.pool.get().await?;
+    let out = conn
+        .transaction(async move |conn| {
+            // The row lock: two moves at once take turns
+            let row: Option<(String, serde_json::Value, Option<serde_json::Value>)> = tickets::table
+                .filter(tickets::id.eq(id))
+                .filter(tickets::user_id.eq(uid))
+                .filter(tickets::scratched_at.is_null())
+                .select((tickets::series, tickets::layout, tickets::picks))
+                .for_update()
+                .first(conn)
+                .await
+                .optional()?;
+            let (series, layout, saved) = row.ok_or(ApiError::NotFound("ticket"))?;
+            let series = Series::parse(&series).filter(|s| s.is_played()).ok_or(ApiError::Invalid("not_played"))?;
+            let played = play::dispatch(series, &layout, saved.as_ref(), mv.as_ref(), Utc::now())
+                .expect("a played series")
+                .map_err(ApiError::Conflict)?;
+            let done = match played.outcome {
+                play::Outcome::Going => {
+                    diesel::update(tickets::table.find(id)).set(tickets::picks.eq(&played.state)).execute(conn).await?;
+                    None
+                }
+                play::Outcome::Over(prize) => Some(finish(conn, uid, id, series, layout, played.state, prize).await?),
+            };
+            Ok::<_, ApiError>((series, PlayState { view: played.view, done }))
+        })
+        .await?;
+    if let Some(done) = &out.1.done {
+        announce(state, &user.username, out.0, done);
+    }
+    Ok(out)
+}
+
+/// Where a ticket played move by move stands (a timed one may end on its own)
+#[get("/tickets/{id}/play")]
+pub async fn look(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    path: web::Path<i64>,
+) -> ApiResult<web::Json<PlayState>> {
+    Ok(web::Json(play_ticket(&state, &user, path.into_inner(), None).await?.1))
+}
+
+#[post("/tickets/{id}/play")]
+pub async fn play_move(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    path: web::Path<i64>,
+    body: web::Json<PlayBody>,
+) -> ApiResult<web::Json<PlayState>> {
+    Ok(web::Json(play_ticket(&state, &user, path.into_inner(), Some(body.into_inner().mv)).await?.1))
 }

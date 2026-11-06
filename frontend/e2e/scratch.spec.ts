@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { newPlayer, scratchAll } from './helpers';
 
-const OUTCOME = /coins!|Another ticket!|Pocket refilled!|Not this time/;
+const OUTCOME = /coins!|Another ticket!|Pocket refilled!|Not this time|A bonus!/;
 
 test('a new player takes the pocket and scratches a ticket', async ({ page }) => {
 	await newPlayer(page);
@@ -22,15 +22,13 @@ test('a new player takes the pocket and scratches a ticket', async ({ page }) =>
 	// The foil falls off by itself once most of it is gone
 	const outcome = sheet.getByText(OUTCOME);
 	await expect(outcome).toBeVisible();
-	const won = (await outcome.textContent())!.includes('Another ticket');
-	await expect(
-		sheet.getByRole('button', { name: `Next ticket (${won ? 3 : 2} left)` })
-	).toBeVisible();
+	// One ticket fewer, unless it won more (a ticket prize, a bonus box): the server knows
+	const left: number = (await (await page.request.get('/api/me')).json()).tickets.length;
+	expect([2, 3, 4]).toContain(left);
+	await expect(sheet.getByRole('button', { name: `Next ticket (${left} left)` })).toBeVisible();
 	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
 	await expect(sheet).toBeHidden();
-
-	// One ticket fewer, unless it won another one
-	await expect(page.getByText(`${won ? 3 : 2} tickets to scratch`)).toBeVisible();
+	await expect(page.getByText(`${left} tickets to scratch`)).toBeVisible();
 });
 
 test('the foil stays until every square is scratched', async ({ page }) => {

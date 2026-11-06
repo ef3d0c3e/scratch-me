@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::cosmetics::Cosmetic;
 
 pub mod bingo;
+pub mod bomb;
+pub mod bonus;
 pub mod cash_wheel;
 pub mod derby;
 pub mod golden;
@@ -17,8 +19,13 @@ pub mod high_card;
 pub mod lucky_dice;
 pub mod lucky_reels;
 pub mod lucky_three;
+pub mod mystery_boxes;
 pub mod number_match;
+pub mod play;
 pub mod plinko;
+pub mod push_luck;
+pub mod rocket;
+pub mod safe_cracker;
 pub mod tic_tac_toe;
 pub mod ticket_chain;
 pub mod treasure_dig;
@@ -39,10 +46,15 @@ pub enum Series {
     LuckyDice,
     Derby,
     Plinko,
+    PushLuck,
+    SafeCracker,
+    MysteryBoxes,
+    DefuseBomb,
+    Rocket,
 }
 
 impl Series {
-    pub const ALL: [Series; 13] = [
+    pub const ALL: [Series; 18] = [
         Series::LuckyThree,
         Series::TicTacToe,
         Series::LuckyDice,
@@ -54,6 +66,11 @@ impl Series {
         Series::Plinko,
         Series::CashWheel,
         Series::TreasureDig,
+        Series::PushLuck,
+        Series::Rocket,
+        Series::DefuseBomb,
+        Series::MysteryBoxes,
+        Series::SafeCracker,
         Series::TicketChain,
         Series::Golden,
     ];
@@ -74,6 +91,11 @@ impl Series {
             Series::LuckyDice => "lucky_dice",
             Series::Derby => "derby",
             Series::Plinko => "plinko",
+            Series::PushLuck => "push_luck",
+            Series::SafeCracker => "safe_cracker",
+            Series::MysteryBoxes => "mystery_boxes",
+            Series::DefuseBomb => "defuse_bomb",
+            Series::Rocket => "rocket",
         }
     }
 
@@ -95,12 +117,22 @@ impl Series {
             Series::LuckyDice => Some(lucky_dice::PRICE),
             Series::Derby => Some(derby::PRICE),
             Series::Plinko => Some(plinko::PRICE),
+            Series::PushLuck => Some(push_luck::PRICE),
+            Series::SafeCracker => Some(safe_cracker::PRICE),
+            Series::MysteryBoxes => Some(mystery_boxes::PRICE),
+            Series::DefuseBomb => Some(bomb::PRICE),
+            Series::Rocket => Some(rocket::PRICE),
             Series::TicketChain | Series::Golden => None,
         }
     }
 
-    /// Draws a ticket of this series
+    /// Draws a ticket of this series, with a bonus box now and then
     pub fn draw(self, rng: &mut impl Rng) -> Drawn {
+        let drawn = self.draw_plain(rng);
+        if bonus::eligible(self) { bonus::add(drawn, rng) } else { drawn }
+    }
+
+    fn draw_plain(self, rng: &mut impl Rng) -> Drawn {
         match self {
             Series::LuckyThree => lucky_three::draw(rng),
             Series::NumberMatch => number_match::draw(rng),
@@ -115,12 +147,22 @@ impl Series {
             Series::LuckyDice => lucky_dice::draw(rng),
             Series::Derby => derby::draw(rng),
             Series::Plinko => plinko::draw(rng),
+            Series::PushLuck => push_luck::draw(rng),
+            Series::SafeCracker => safe_cracker::draw(rng),
+            Series::MysteryBoxes => mystery_boxes::draw(rng),
+            Series::DefuseBomb => bomb::draw(rng),
+            Series::Rocket => rocket::draw(rng),
         }
     }
 
     /// Played by choosing where to dig, not by scratching all at once
     pub fn is_dig(self) -> bool {
         self == Series::TreasureDig
+    }
+
+    /// Played move by move through the play protocol (`play.rs`)
+    pub fn is_played(self) -> bool {
+        play::handles(self)
     }
 }
 
@@ -146,6 +188,38 @@ pub enum Prize {
     Cosmetic {
         item: Cosmetic,
     },
+    /// Several prizes at once (a bonus box adding a ticket to coins); never nested
+    Bundle {
+        items: Vec<Prize>,
+    },
+}
+
+impl Prize {
+    /// Coins it pays, bundled ones included
+    pub fn coins(&self) -> i64 {
+        match self {
+            Prize::Coins { amount } => *amount,
+            Prize::Bundle { items } => items.iter().map(Prize::coins).sum(),
+            _ => 0,
+        }
+    }
+
+    /// Several prizes as one: nothing, the one, or a bundle
+    pub fn of(items: Vec<Prize>) -> Prize {
+        let mut items: Vec<Prize> = items
+            .into_iter()
+            .flat_map(|p| match p {
+                Prize::Bundle { items } => items,
+                Prize::Nothing => vec![],
+                p => vec![p],
+            })
+            .collect();
+        match items.len() {
+            0 => Prize::Nothing,
+            1 => items.pop().expect("one"),
+            _ => Prize::Bundle { items },
+        }
+    }
 }
 
 /// A drawn ticket: what the player will uncover and what it pays
@@ -206,6 +280,7 @@ pub(crate) fn measured_value(series: Series, n: usize, rng: &mut impl Rng) -> f6
             Prize::Tickets { series } => series.iter().map(|s| ticket(*s, rng)).sum(),
             // Valued at what they pay as a duplicate
             Prize::Cosmetic { .. } => crate::cosmetics::DUPLICATE_COINS as f64,
+            Prize::Bundle { items } => items.iter().map(|p| value(p, depth, rng)).sum(),
         }
     }
     (0..n)
@@ -257,6 +332,10 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(11);
         for s in Series::ALL {
             let Some(price) = s.price() else { continue };
+            // Played move by move: each game's own tests check its payback under several strategies
+            if s.is_played() {
+                continue;
+            }
             let ratio = measured_value(s, 60_000, &mut rng) / price as f64;
             assert!((0.68..=0.92).contains(&ratio), "{} pays back {ratio:.2} of its price", s.key());
         }

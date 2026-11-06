@@ -14,7 +14,12 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	tic_tac_toe: { edge: '#38bdf8', ink: '#0369a1', shadow: '#082f49' },
 	lucky_dice: { edge: '#f43f5e', ink: '#be123c', shadow: '#4c0519' },
 	derby: { edge: '#16a34a', ink: '#166534', shadow: '#052e16' },
-	plinko: { edge: '#d946ef', ink: '#a21caf', shadow: '#4a044e' }
+	plinko: { edge: '#d946ef', ink: '#a21caf', shadow: '#4a044e' },
+	push_luck: { edge: '#f97316', ink: '#c2410c', shadow: '#431407' },
+	safe_cracker: { edge: '#64748b', ink: '#334155', shadow: '#0f172a' },
+	mystery_boxes: { edge: '#8b5cf6', ink: '#6d28d9', shadow: '#2e1065' },
+	defuse_bomb: { edge: '#ef4444', ink: '#b91c1c', shadow: '#450a0a' },
+	rocket: { edge: '#0ea5e9', ink: '#0369a1', shadow: '#082f49' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -32,11 +37,24 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	tic_tac_toe: { cols: 3, rows: 1 },
 	lucky_dice: { cols: 3, rows: 1 },
 	derby: { cols: 2, rows: 1 },
-	plinko: { cols: 1, rows: 1 }
+	plinko: { cols: 1, rows: 1 },
+	push_luck: { cols: 1, rows: 1 },
+	safe_cracker: { cols: 1, rows: 1 },
+	mystery_boxes: { cols: 1, rows: 1 },
+	defuse_bomb: { cols: 1, rows: 1 },
+	rocket: { cols: 1, rows: 1 }
 };
 
-/** Series played spot by spot, not scratched all at once */
-export const isDig = (s: Series) => s === 'treasure_dig';
+/** Series played move by move, not scratched all at once */
+export const PLAYED: Series[] = [
+	'treasure_dig',
+	'push_luck',
+	'safe_cracker',
+	'mystery_boxes',
+	'defuse_bomb',
+	'rocket'
+];
+export const isPlayed = (s: Series) => PLAYED.includes(s);
 
 /** A theme's colours at a glance: background, panel, accent, foil */
 export const SKIN_SWATCH: Record<ThemeId, [string, string, string, string]> = {
