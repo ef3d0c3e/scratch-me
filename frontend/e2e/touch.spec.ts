@@ -25,7 +25,7 @@ async function rubHalfOfFirstSquare(page: Page) {
 
 async function openTicket(page: Page) {
 	await newPlayer(page);
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	await expect(page.getByRole('dialog').getByRole('button', { name: 'Reveal all' })).toBeEnabled();
 }

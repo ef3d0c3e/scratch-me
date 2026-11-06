@@ -20,7 +20,7 @@ async function openTicket(page: Page) {
 	// No drift: the shine only moves when the player does
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await newPlayer(page);
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	await expect(page.getByRole('dialog').getByRole('button', { name: 'Reveal all' })).toBeEnabled();
 	await page.waitForTimeout(400);

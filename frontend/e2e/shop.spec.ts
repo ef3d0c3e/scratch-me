@@ -46,7 +46,7 @@ test('a tool in use shows under the finger while scratching', async ({ page }) =
 	await page.getByRole('button', { name: 'Buy Key' }).click();
 	await page.getByRole('button', { name: 'Use Key' }).click();
 	await page.getByRole('link', { name: /Lobby/ }).click();
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	const box = (await page.locator('.play canvas.scratch').boundingBox())!;
 	await page.mouse.move(box.x + 40, box.y + 40);
@@ -81,12 +81,15 @@ test('a ticket scratched in another tab is dropped, not an error', async ({ page
 	const other = await context.newPage();
 	await other.request.post(`/api/tickets/${me.tickets[0].id}/scratch`, { data: {} });
 	await other.close();
+	// What is left: 2, or more when that ticket won tickets (a ticket prize, a bonus box)
+	const left: number = (await (await page.request.get('/api/me')).json()).tickets.length;
+	expect(left).toBeGreaterThanOrEqual(2);
 
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	const sheet = page.getByRole('dialog');
 	await expect(sheet.getByRole('alert')).toContainText('already scratched');
 	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
-	await expect(page.getByText('2 tickets to scratch')).toBeVisible();
+	await expect(page.getByText(`${left} tickets to scratch`)).toBeVisible();
 });
 
 test('buying does not move the list: taps in a row hit the same button', async ({ page }) => {

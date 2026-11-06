@@ -9,7 +9,7 @@ test('a new player takes the pocket and scratches a ticket', async ({ page }) =>
 	await expect(page.getByText('No tickets right now')).toBeVisible();
 	await expect(page.getByText('3 tickets ready')).toBeVisible();
 
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await expect(page.getByText('3 tickets to scratch')).toBeVisible();
 	await expect(page.getByText(/Next in 19:/)).toBeVisible();
 	await expect(page.getByText('Up to 35 coins each, more as you level')).toBeVisible();
@@ -35,7 +35,7 @@ test('a new player takes the pocket and scratches a ticket', async ({ page }) =>
 
 test('the foil stays until every square is scratched', async ({ page }) => {
 	await newPlayer(page);
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	const sheet = page.getByRole('dialog');
 	await expect(sheet.getByRole('button', { name: 'Reveal all' })).toBeEnabled();
@@ -51,7 +51,7 @@ test('the foil stays until every square is scratched', async ({ page }) => {
 
 test('reveal all shows the prize without scratching', async ({ page }) => {
 	await newPlayer(page);
-	await page.getByRole('button', { name: 'Take' }).click();
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	const sheet = page.getByRole('dialog');
 	await sheet.getByRole('button', { name: 'Reveal all' }).click();
