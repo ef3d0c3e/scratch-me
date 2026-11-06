@@ -11,6 +11,9 @@ pub enum ApiError {
     /// Logged in, but not allowed (not an admin)
     #[error("forbidden")]
     Forbidden,
+    /// Not for guests: they sign up first
+    #[error("guests cannot")]
+    Guest,
     #[error("not found: {0}")]
     NotFound(&'static str),
     /// Input refused, the code names the rule
@@ -38,7 +41,7 @@ impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
-            ApiError::Forbidden => StatusCode::FORBIDDEN,
+            ApiError::Forbidden | ApiError::Guest => StatusCode::FORBIDDEN,
             ApiError::NotFound(_) => StatusCode::NOT_FOUND,
             ApiError::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
@@ -57,6 +60,7 @@ impl ResponseError for ApiError {
         let error = match self {
             ApiError::Unauthorized => "unauthorized",
             ApiError::Forbidden => "forbidden",
+            ApiError::Guest => "guest",
             ApiError::NotFound(code) | ApiError::Invalid(code) | ApiError::Conflict(code) | ApiError::TooMany(code) => {
                 code
             }

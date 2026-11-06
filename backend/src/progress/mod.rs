@@ -66,8 +66,8 @@ pub async fn ensure_quests(conn: &mut AsyncPgConnection, uid: i64, day: NaiveDat
     if have > 0 {
         return Ok(());
     }
-    let xp: i64 = users::table.find(uid).select(users::xp).first(conn).await?;
-    let rows: Vec<_> = quests::draw(uid, day, levels::level_for(xp))
+    let (xp, guest): (i64, bool) = users::table.find(uid).select((users::xp, users::is_guest)).first(conn).await?;
+    let rows: Vec<_> = quests::draw(uid, day, levels::level_for(xp), guest)
         .into_iter()
         .map(|k| (quest_rows::user_id.eq(uid), quest_rows::day.eq(day), quest_rows::key.eq(k)))
         .collect();

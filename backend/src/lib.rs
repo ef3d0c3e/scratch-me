@@ -46,6 +46,10 @@ pub async fn chores(state: &AppState) -> anyhow::Result<()> {
         tracing::info!(%user, amount, "pot won");
         state.live.pot(&user, amount);
     }
+    let gone = auth::forget_lost_guests(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    if gone > 0 {
+        tracing::info!(gone, "lost guests forgotten");
+    }
     for (challenger, id) in routes::duels::expire_due(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))? {
         state.live.notify(challenger, live::Event::Duel { id, from: String::new(), status: "expired".into() });
     }

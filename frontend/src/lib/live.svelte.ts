@@ -49,10 +49,11 @@ export class Live {
 	#holdFor: string | null = null;
 	#held: LiveMessage[] = [];
 
-	start() {
+	/** `chat`: false for guests, who have none (the server sends them no shouts) */
+	start({ chat = true } = {}) {
 		this.#closed = false;
 		this.#connect();
-		void this.loadMutes();
+		if (chat) void this.loadMutes();
 	}
 
 	stop() {
@@ -72,12 +73,17 @@ export class Live {
 		const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 		const ws = new WebSocket(`${proto}://${location.host}/api/live`);
 		this.#ws = ws;
+		// A socket replaced since (a restart) has nothing more to say
 		ws.onopen = () => {
+			if (ws !== this.#ws) return;
 			this.connected = true;
 			this.#retry = 1000;
 		};
-		ws.onmessage = (e) => this.receive(JSON.parse(e.data) as LiveMessage);
+		ws.onmessage = (e) => {
+			if (ws === this.#ws) this.receive(JSON.parse(e.data) as LiveMessage);
+		};
 		ws.onclose = () => {
+			if (ws !== this.#ws) return;
 			this.connected = false;
 			if (this.#closed) return;
 			// Back off up to 30 s, so a server restart is not hammered

@@ -101,6 +101,8 @@ export interface MeDto {
 	/** The achievement shown next to their name */
 	title: string | null;
 	is_admin: boolean;
+	/** Playing without an account: no chat, and signing up keeps it all */
+	guest: boolean;
 	tickets: TicketDto[];
 }
 

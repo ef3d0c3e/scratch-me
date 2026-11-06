@@ -32,6 +32,7 @@
 			case 'gift':
 			case 'duel':
 			case 'pot':
+			case 'welcome':
 				return n.what;
 		}
 	}
@@ -50,7 +51,8 @@
 		achievement: '🏆',
 		gift: '🎁',
 		duel: '⚔️',
-		pot: '🍯'
+		pot: '🍯',
+		welcome: '🎉'
 	};
 </script>
 

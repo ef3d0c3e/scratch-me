@@ -82,6 +82,8 @@ pub enum Event {
 #[derive(Debug)]
 pub struct Envelope {
     pub to: Option<i64>,
+    /// A shout: guests do not get it
+    pub chat: bool,
     pub json: String,
 }
 
@@ -130,7 +132,8 @@ impl Hub {
     fn send_to(&self, to: Option<i64>, event: &Event) {
         // No connected client is fine: the event is simply dropped
         let json = serde_json::to_string(event).expect("events serialize");
-        let _ = self.tx.send(Arc::new(Envelope { to, json }));
+        let chat = matches!(event, Event::Chat(_));
+        let _ = self.tx.send(Arc::new(Envelope { to, chat, json }));
     }
 
     fn send(&self, event: &Event) {
@@ -249,6 +252,11 @@ mod tests {
         assert_eq!(first["id"], "first_win");
     }
 
+    fn hub_last(rx: &mut broadcast::Receiver<Arc<Envelope>>, send: impl FnOnce()) -> Arc<Envelope> {
+        send();
+        rx.try_recv().unwrap()
+    }
+
     #[test]
     fn notes_reach_their_player_only() {
         let hub = Hub::default();
@@ -258,6 +266,9 @@ mod tests {
         assert!(env.is_for(7) && !env.is_for(8));
         hub.pot("bob", 500);
         assert!(rx.try_recv().unwrap().is_for(8), "the pot is news for all");
+        assert!(!hub_last(&mut rx, || hub.pot("bob", 1)).chat);
+        let shout = ChatEvent { id: 1, user: "ana".into(), level: 1, title: None, body: "hi".into(), at: Utc::now() };
+        assert!(hub_last(&mut rx, || hub.chat(shout)).chat, "shouts are marked: guests skip them");
     }
 
     #[test]

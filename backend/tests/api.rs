@@ -1091,3 +1091,113 @@ async fn duels_stake_play_out_and_refund() {
     let (_, list) = get(&app, "/api/duels", &ca).await;
     assert_eq!(list[0]["status"], "expired");
 }
+
+async fn guest<S>(app: &S) -> Cookie<'static>
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let req = test::TestRequest::post().uri("/api/auth/guest").set_json(json!({ "tz": "UTC" })).to_request();
+    let res = test::call_service(app, req).await;
+    assert_eq!(res.status(), 201);
+    res.response().cookies().find(|c| c.name() == "session").expect("session cookie").into_owned()
+}
+
+#[actix_web::test]
+async fn a_guest_plays_at_once_then_keeps_the_account() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let g = guest(&app).await;
+    let (status, me) = get(&app, "/api/me", &g).await;
+    assert_eq!(status, 200);
+    assert_eq!(me["guest"], true);
+    assert!(me["username"].as_str().unwrap().starts_with("Guest-"));
+    assert_eq!(me["coins"], STARTING_COINS);
+    // Plays like anyone: the pocket, a ticket
+    let (status, _) = post(&app, "/api/pocket/claim", &g).await;
+    assert_eq!(status, 200);
+    let (_, me) = get(&app, "/api/me", &g).await;
+    let held = me["tickets"].as_array().unwrap().len();
+    assert!(held > 0);
+
+    // Keeping it: the name rules hold, taken names and guest names are refused
+    let taken = unique("taken");
+    register(&app, &taken, "UTC").await;
+    let name = unique("kept");
+    let claim = |username: &str, email: &str| json!({ "username": username, "email": email, "password": "123456789" });
+    let (status, body) = post_json(&app, "/api/auth/claim", &g, claim("Guest-mine", "a@example.com")).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("username_reserved")));
+    let (status, body) = post_json(&app, "/api/auth/claim", &g, claim(&taken, "b@example.com")).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("username_taken")));
+    let email = format!("{name}@example.com");
+    let (status, _) = post_json(&app, "/api/auth/claim", &g, claim(&name, &email)).await;
+    assert_eq!(status, 200);
+
+    // Same account, same session: everything is still there
+    let (_, me) = get(&app, "/api/me", &g).await;
+    assert_eq!((me["guest"].as_bool(), me["username"].as_str()), (Some(false), Some(name.as_str())));
+    assert_eq!(me["tickets"].as_array().unwrap().len(), held);
+    let (status, body) = post_json(&app, "/api/auth/claim", &g, claim(&unique("again"), "c@example.com")).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("not_a_guest")));
+    // And it logs in like any account
+    let req = test::TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "login": email, "password": "123456789" }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 200);
+}
+
+#[actix_web::test]
+async fn guests_have_no_chat() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let g = guest(&app).await;
+    let (status, body) = get(&app, "/api/shoutbox", &g).await;
+    assert_eq!((status, body["error"].as_str()), (403, Some("guest")));
+    let (status, _) = post_json(&app, "/api/shoutbox", &g, json!({ "body": "hi" })).await;
+    assert_eq!(status, 403);
+    let (status, _) = get(&app, "/api/mutes", &g).await;
+    assert_eq!(status, 403);
+    let other = unique("muteme");
+    register(&app, &other, "UTC").await;
+    let (status, _) = post(&app, &format!("/api/mutes/{other}"), &g).await;
+    assert_eq!(status, 403);
+    // The rest of the social side is theirs: announcements, profiles
+    assert_eq!(get(&app, "/api/announcements", &g).await.0, 200);
+    assert_eq!(get(&app, &format!("/api/players/{other}"), &g).await.0, 200);
+    let (_, q) = get(&app, "/api/quests", &g).await;
+    assert!(q["items"].as_array().unwrap().iter().all(|x| x["key"] != "shout"));
+}
+
+#[actix_web::test]
+async fn guests_nobody_can_reach_are_forgotten() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let g = guest(&app).await;
+    let (_, me) = get(&app, "/api/me", &g).await;
+    let lost = me["username"].as_str().unwrap().to_owned();
+    let member = unique("stays");
+    register(&app, &member, "UTC").await;
+    let mut c = conn().await;
+    for name in [&lost, &member] {
+        diesel::update(schema::sessions::table)
+            .filter(
+                schema::sessions::user_id
+                    .eq_any(schema::users::table.filter(schema::users::username.eq(name)).select(schema::users::id)),
+            )
+            .set(schema::sessions::expires_at.eq(chrono::Utc::now() - chrono::Duration::days(1)))
+            .execute(&mut c)
+            .await
+            .unwrap();
+    }
+    // Another guest still playing stays
+    let kept = guest(&app).await;
+    scratchme_api::chores(&state).await.unwrap();
+    let left: Vec<String> = schema::users::table
+        .filter(schema::users::username.eq_any([&lost, &member]))
+        .select(schema::users::username)
+        .load(&mut c)
+        .await
+        .unwrap();
+    assert_eq!(left, vec![member], "the lost guest is gone, the member stays");
+    assert_eq!(get(&app, "/api/me", &kept).await.0, 200);
+}

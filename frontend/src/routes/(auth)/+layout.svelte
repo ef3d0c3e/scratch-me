@@ -1,8 +1,25 @@
 <script lang="ts">
 	import type { LayoutProps } from './$types';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
+	import { post } from '#lib/api.ts';
 	const i18n = getI18n();
 	let { children }: LayoutProps = $props();
+	let busy = $state(false);
+	let error = $state('');
+
+	/** Straight in, no account: signing up later keeps it all */
+	async function asGuest() {
+		busy = true;
+		error = '';
+		try {
+			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			await post('/auth/guest', { tz });
+			location.assign('/');
+		} catch (err) {
+			error = i18n.error(err);
+			busy = false;
+		}
+	}
 </script>
 
 <div class="auth">
@@ -15,10 +32,39 @@
 		<p class="logo">Scratch<span>-me</span></p>
 		<p class="tagline">{i18n.t('app.tagline')}</p>
 		{@render children()}
+		<div class="guest">
+			<span class="or">{i18n.t('auth.or')}</span>
+			<button type="button" class="btn ghost" disabled={busy} onclick={asGuest}
+				>{i18n.t('auth.guest')}</button
+			>
+			<p class="hint">{i18n.t('auth.guest_hint')}</p>
+			{#if error}<p class="err" role="alert">{error}</p>{/if}
+		</div>
 	</div>
 </div>
 
 <style>
+	.guest {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 18px;
+		text-align: center;
+	}
+	.guest .btn {
+		width: 100%;
+	}
+	.or {
+		font-size: 12px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		opacity: 0.6;
+	}
+	.guest .hint {
+		font-size: 12px;
+		opacity: 0.75;
+	}
 	.auth {
 		min-height: 100dvh;
 		display: flex;

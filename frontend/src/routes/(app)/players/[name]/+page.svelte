@@ -172,9 +172,11 @@
 				disabled={busy || session.me.coins < STAKE}
 				onclick={challenge}>⚔️ {i18n.t('profile.challenge', { n: STAKE })}</button
 			>
-			<button type="button" class="btn ghost small" disabled={busy} onclick={toggleMute}
-				>{p.muted ? i18n.t('profile.unmute') : i18n.t('profile.mute')}</button
-			>
+			{#if !session.me.guest}
+				<button type="button" class="btn ghost small" disabled={busy} onclick={toggleMute}
+					>{p.muted ? i18n.t('profile.unmute') : i18n.t('profile.mute')}</button
+				>
+			{/if}
 		</div>
 	{/if}
 	{#if done}<p class="done" role="status">{done}</p>{/if}

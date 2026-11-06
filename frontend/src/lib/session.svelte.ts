@@ -11,7 +11,7 @@ import type { Cosmetic, MeDto, Prize, Progress, Scratched, TicketDto } from './t
 /** Something to tell the player, shown a few seconds */
 export interface News {
 	id: number;
-	kind: 'level' | 'quest' | 'bonus' | 'achievement' | 'gift' | 'duel' | 'pot';
+	kind: 'level' | 'quest' | 'bonus' | 'achievement' | 'gift' | 'duel' | 'pot' | 'welcome';
 	what: string;
 	reward: Prize;
 }

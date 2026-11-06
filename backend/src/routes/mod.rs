@@ -25,6 +25,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             }))
             .service(health)
             .service(auth::register)
+            .service(auth::guest)
+            .service(auth::claim)
             .service(auth::login)
             .service(auth::logout)
             .service(player::get_me)

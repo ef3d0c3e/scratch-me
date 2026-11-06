@@ -37,7 +37,7 @@
 		if (n.type !== 'pot' || n.user === me) void session.refresh().catch(() => {});
 	};
 	onMount(() => {
-		live.start();
+		live.start({ chat: !session.me.guest });
 		return () => live.stop();
 	});
 	// A ticket on screen: our own big win waits for the reveal before it hits the feed
@@ -57,12 +57,14 @@
 		setCookie('skin', skin);
 	});
 
-	const tabs = [
+	const allTabs = [
 		{ href: '/', key: 'nav.lobby', icon: '🎟️' },
 		{ href: '/shop', key: 'nav.shop', icon: '🛍️' },
 		{ href: '/chat', key: 'nav.chat', icon: '💬' },
 		{ href: '/trophies', key: 'nav.trophies', icon: '🏆' }
 	] as const;
+	// No chat for guests
+	const tabs = $derived(session.me.guest ? allTabs.filter((t) => t.href !== '/chat') : allTabs);
 	const left = $derived(
 		session.open ? session.me.tickets.filter((t) => t.id !== session.open?.id).length : 0
 	);

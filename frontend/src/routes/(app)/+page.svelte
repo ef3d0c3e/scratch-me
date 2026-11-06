@@ -149,6 +149,15 @@
 			</p>
 		{/key}
 	{/if}
+	{#if me.guest}
+		<aside class="guest" aria-labelledby="guest-title">
+			<div>
+				<h2 id="guest-title">{i18n.t('guest.title')}</h2>
+				<p>{i18n.t('guest.lead')}</p>
+			</div>
+			<a class="btn small primary" href="/keep">{i18n.t('guest.keep')}</a>
+		</aside>
+	{/if}
 	<section class="stack" aria-labelledby="stack-title">
 		{#if stack.length}
 			<!-- A big tap target for the same action as the button below -->
@@ -279,11 +288,34 @@
 			aria-pressed={fx.haptics}
 			onclick={() => fx.toggleHaptics()}>📳 {i18n.t('settings.haptics')}</button
 		>
-		<button type="button" class="link" onclick={logout}>{i18n.t('auth.logout')}</button>
+		{#if !me.guest}
+			<!-- A guest logging out could never come back: they sign up instead -->
+			<button type="button" class="link" onclick={logout}>{i18n.t('auth.logout')}</button>
+		{/if}
 	</footer>
 </div>
 
 <style>
+	.guest {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 12px 14px;
+		border-radius: 16px;
+		background: linear-gradient(135deg, rgba(87, 184, 255, 0.22), var(--night-2));
+		border: 1px solid rgba(87, 184, 255, 0.5);
+	}
+	.guest h2 {
+		font-size: 15px;
+	}
+	.guest p {
+		font-size: 13px;
+		opacity: 0.85;
+	}
+	.guest .btn {
+		flex-shrink: 0;
+	}
 	.notice {
 		display: flex;
 		align-items: flex-start;

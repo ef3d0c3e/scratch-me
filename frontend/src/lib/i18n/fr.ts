@@ -497,5 +497,19 @@ export default {
 	'errors.gift_to_self': 'Vous ne pouvez pas vous offrir un ticket.',
 	'errors.duel_self': 'Vous ne pouvez pas vous défier vous-même.',
 	'errors.not_your_duel': 'Ce duel ne vous concerne pas.',
-	'errors.duel': 'Ce duel est terminé.'
+	'errors.duel': 'Ce duel est terminé.',
+	'auth.or': 'ou',
+	'auth.guest': 'Jouer en invité',
+	'auth.guest_hint':
+		'Sans inscription : vous pourrez garder votre progression plus tard. Pas de chat pour les invités.',
+	'guest.title': 'Vous jouez en invité',
+	'guest.lead': 'Inscrivez-vous pour garder votre progression et rejoindre le chat.',
+	'guest.keep': 'S’inscrire',
+	'keep.title': 'Garder votre progression',
+	'keep.lead': 'Vos pièces, tickets, niveaux et trophées restent. Choisissez un nom de joueur.',
+	'keep.submit': 'Garder ma progression',
+	'keep.done': 'Bienvenue, {name} ! Votre progression est sauvegardée.',
+	'errors.username_reserved': 'Les noms commençant par « guest » sont réservés aux invités.',
+	'errors.not_a_guest': 'Ce compte est déjà le vôtre.',
+	'errors.guest': 'Inscrivez-vous pour utiliser le chat.'
 } satisfies Record<keyof typeof en, string>;

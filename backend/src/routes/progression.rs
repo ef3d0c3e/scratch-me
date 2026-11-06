@@ -116,7 +116,7 @@ pub async fn reroll(
                 .select(rows::key)
                 .load(conn)
                 .await?;
-            let new = quests::reroll(user.id, day, levels::level_for(xp), &have)
+            let new = quests::reroll(user.id, day, levels::level_for(xp), user.is_guest, &have)
                 .ok_or(ApiError::Conflict("no_other_quest"))?;
             diesel::delete(rows::table.find((user.id, day, &key))).execute(conn).await?;
             diesel::insert_into(rows::table)

@@ -491,5 +491,18 @@ export default {
 	'errors.gift_to_self': 'You cannot send a ticket to yourself.',
 	'errors.duel_self': 'You cannot duel yourself.',
 	'errors.not_your_duel': 'That is not your duel to answer.',
-	'errors.duel': 'That duel is over.'
+	'errors.duel': 'That duel is over.',
+	'auth.or': 'or',
+	'auth.guest': 'Play as a guest',
+	'auth.guest_hint': 'No sign-up: you can keep your progress later. Guests have no chat.',
+	'guest.title': 'Playing as a guest',
+	'guest.lead': 'Sign up to keep your progress and join the chat.',
+	'guest.keep': 'Sign up',
+	'keep.title': 'Keep your progress',
+	'keep.lead': 'Your coins, tickets, levels and trophies all stay. Pick a name to play under.',
+	'keep.submit': 'Keep my progress',
+	'keep.done': 'Welcome, {name}! Your progress is saved.',
+	'errors.username_reserved': 'Names starting with “guest” are for guests.',
+	'errors.not_a_guest': 'This account is already yours.',
+	'errors.guest': 'Sign up to use the chat.'
 } as const;

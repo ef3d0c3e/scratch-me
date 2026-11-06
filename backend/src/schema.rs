@@ -152,8 +152,8 @@ diesel::table! {
     users (id) {
         id -> Int8,
         username -> Text,
-        email -> Text,
-        password_hash -> Text,
+        email -> Nullable<Text>,
+        password_hash -> Nullable<Text>,
         coins -> Int8,
         tz -> Text,
         pocket_count -> Int4,
@@ -165,6 +165,7 @@ diesel::table! {
         title -> Nullable<Text>,
         is_admin -> Bool,
         foil -> Text,
+        is_guest -> Bool,
     }
 }
 

@@ -47,6 +47,8 @@ pub struct MeDto {
     /// The achievement shown next to their name
     pub title: Option<String>,
     pub is_admin: bool,
+    /// Playing without an account: no chat, and signing up keeps it all
+    pub guest: bool,
     /// Unscratched tickets, oldest first
     pub tickets: Vec<TicketDto>,
 }
@@ -119,6 +121,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         level: levels::dto(xp),
         title,
         is_admin,
+        guest: user.is_guest,
         tickets: held,
     }))
 }

@@ -75,9 +75,12 @@ pub async fn live(
     req: HttpRequest,
     body: web::Payload,
 ) -> Result<HttpResponse, actix_web::Error> {
+    // Guests have no chat: no shouts in the hello, none live
+    let guest = user.is_guest;
     let (messages, news) = {
         let mut conn = state.pool.get().await.map_err(ApiError::from)?;
-        (history(&mut conn, user.id).await?, live_announcements(&mut conn).await?)
+        let messages = if guest { vec![] } else { history(&mut conn, user.id).await? };
+        (messages, live_announcements(&mut conn).await?)
     };
     let hello = serde_json::json!({
         "type": "hello",
@@ -100,7 +103,7 @@ pub async fn live(
         loop {
             tokio::select! {
                 event = rx.recv() => match event {
-                    Ok(env) if env.is_for(uid) => {
+                    Ok(env) if env.is_for(uid) && !(guest && env.chat) => {
                         if session.text(env.json.clone()).await.is_err() {
                             break;
                         }
@@ -134,6 +137,7 @@ pub async fn live(
 
 #[get("/shoutbox")]
 pub async fn get_shoutbox(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<Vec<ChatEvent>>> {
+    user.member()?;
     let mut conn = state.pool.get().await?;
     Ok(web::Json(history(&mut conn, user.id).await?))
 }
@@ -155,6 +159,7 @@ pub async fn post_shout(
     user: CurrentUser,
     body: web::Json<ShoutBody>,
 ) -> ApiResult<HttpResponse> {
+    user.member()?;
     let text = body.into_inner().body.trim().to_owned();
     if text.is_empty() {
         return Err(ApiError::Invalid("empty_message"));
@@ -207,6 +212,7 @@ async fn user_id(conn: &mut AsyncPgConnection, name: &str) -> ApiResult<i64> {
 
 #[get("/mutes")]
 pub async fn list_mutes(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<Vec<String>>> {
+    user.member()?;
     let mut conn = state.pool.get().await?;
     let names = mutes::table
         .inner_join(users::table.on(users::id.eq(mutes::muted_id)))
@@ -219,6 +225,7 @@ pub async fn list_mutes(state: web::Data<AppState>, user: CurrentUser) -> ApiRes
 
 #[post("/mutes/{name}")]
 pub async fn mute(state: web::Data<AppState>, user: CurrentUser, path: web::Path<String>) -> ApiResult<HttpResponse> {
+    user.member()?;
     let mut conn = state.pool.get().await?;
     let other = user_id(&mut conn, &path).await?;
     if other == user.id {
@@ -234,6 +241,7 @@ pub async fn mute(state: web::Data<AppState>, user: CurrentUser, path: web::Path
 
 #[delete("/mutes/{name}")]
 pub async fn unmute(state: web::Data<AppState>, user: CurrentUser, path: web::Path<String>) -> ApiResult<HttpResponse> {
+    user.member()?;
     let mut conn = state.pool.get().await?;
     let other = user_id(&mut conn, &path).await?;
     diesel::delete(mutes::table.find((user.id, other))).execute(&mut conn).await?;
