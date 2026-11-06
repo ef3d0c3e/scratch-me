@@ -507,5 +507,16 @@ export default {
 	'errors.not_a_guest': 'This account is already yours.',
 	'errors.guest': 'Sign up to play with others.',
 	'errors.player_is_guest': 'That player is a guest: they have no gifts or duels.',
-	'lobby.pocket_worth': 'Up to {n} coins each, more as you level'
+	'lobby.pocket_worth': 'Up to {n} coins each, more as you level',
+	'nav.top': 'Top',
+	'top.title': 'Leaderboard',
+	'top.by': 'Rank by',
+	'top.coins': 'Coins',
+	'top.level': 'Level',
+	'top.level_n': 'Level {n}',
+	'top.xp': '{n} XP',
+	'top.rank': 'Rank {n}',
+	'top.empty': 'Nobody ranked yet',
+	'top.you': 'Your place',
+	'top.guest': 'Guests are not ranked: sign up to take your place on the board.'
 } as const;

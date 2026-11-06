@@ -1260,3 +1260,48 @@ async fn pocket_tickets_grow_with_the_level() {
         assert_eq!(t["source"], "pocket");
     }
 }
+
+#[actix_web::test]
+async fn leaderboard_ranks_members_by_coins_and_level() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    // Above anything other tests leave behind, and above earlier runs
+    let base = 1_000_000_000_000_000 + chrono::Utc::now().timestamp_millis() * 10;
+    let (a, b, c) = (unique("top"), unique("second"), unique("tied"));
+    let ca = register(&app, &a, "UTC").await;
+    register(&app, &b, "UTC").await;
+    register(&app, &c, "UTC").await;
+    set_coins(&a, base + 3).await;
+    set_coins(&b, base + 2).await;
+    set_coins(&c, base + 2).await;
+    // A guest richer than all of them is not ranked
+    let g = guest(&app).await;
+    let gname = get(&app, "/api/me", &g).await.1["username"].as_str().unwrap().to_owned();
+    set_coins(&gname, base + 9).await;
+
+    let (status, board) = get(&app, "/api/leaderboard?by=coins", &ca).await;
+    assert_eq!(status, 200);
+    let rows = board["rows"].as_array().unwrap();
+    assert!(rows.len() <= 50);
+    assert!(rows.iter().all(|r| r["username"] != gname.as_str()), "no guests");
+    let at = |name: &str| rows.iter().find(|r| r["username"] == name).expect("ranked");
+    assert_eq!(at(&a)["value"], base + 3);
+    let top = at(&a)["rank"].as_i64().unwrap();
+    // A tie shares its rank; the earlier sign-up is listed first
+    assert_eq!((at(&b)["rank"].as_i64(), at(&c)["rank"].as_i64()), (Some(top + 1), Some(top + 1)));
+    let pos = |name: &str| rows.iter().position(|r| r["username"] == name).unwrap();
+    assert!(pos(&a) < pos(&b) && pos(&b) < pos(&c));
+    assert_eq!(board["me"], json!({ "rank": top, "value": base + 3 }));
+
+    // By level: experience decides, the level comes with it
+    set_xp(&b, 10_000_000 + chrono::Utc::now().timestamp_millis() % 1_000_000).await;
+    let (_, board) = get(&app, "/api/leaderboard?by=level", &ca).await;
+    let row = board["rows"].as_array().unwrap().iter().find(|r| r["username"] == b.as_str()).expect("ranked");
+    assert!(row["level"].as_i64().unwrap() > 400);
+    assert!(board["me"]["rank"].as_i64().unwrap() > row["rank"].as_i64().unwrap());
+
+    // A guest looks, unranked
+    let (status, board) = get(&app, "/api/leaderboard?by=level", &g).await;
+    assert_eq!((status, &board["me"]), (200, &Value::Null));
+    assert_eq!(get(&app, "/api/leaderboard?by=gold", &g).await.0, 400);
+}

@@ -409,6 +409,16 @@ export interface DuelLayout {
 	won: boolean;
 }
 
+export type Board = 'coins' | 'level';
+
+/** See backend/src/routes/leaderboard.rs */
+export interface LeaderboardDto {
+	by: Board;
+	rows: { rank: number; username: string; level: number; title: string | null; value: number }[];
+	/** The viewer's place, top 50 or not; null for a guest */
+	me: { rank: number; value: number } | null;
+}
+
 /** Today's shared pot, see backend/src/routes/pot.rs */
 export interface PotDto {
 	amount: number;

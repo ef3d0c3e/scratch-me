@@ -514,5 +514,16 @@ export default {
 	'errors.not_a_guest': 'Ce compte est déjà le vôtre.',
 	'errors.guest': 'Inscrivez-vous pour jouer avec les autres.',
 	'errors.player_is_guest': 'Ce joueur est un invité : pas de cadeaux ni de duels.',
-	'lobby.pocket_worth': 'Jusqu’à {n} pièces chacun, plus en montant de niveau'
+	'lobby.pocket_worth': 'Jusqu’à {n} pièces chacun, plus en montant de niveau',
+	'nav.top': 'Top',
+	'top.title': 'Classement',
+	'top.by': 'Classer par',
+	'top.coins': 'Pièces',
+	'top.level': 'Niveau',
+	'top.level_n': 'Niveau {n}',
+	'top.xp': '{n} XP',
+	'top.rank': 'Rang {n}',
+	'top.empty': 'Personne au classement pour l’instant',
+	'top.you': 'Votre place',
+	'top.guest': 'Les invités ne sont pas classés : inscrivez-vous pour prendre votre place.'
 } satisfies Record<keyof typeof en, string>;

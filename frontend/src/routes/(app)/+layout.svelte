@@ -61,6 +61,7 @@
 		{ href: '/', key: 'nav.lobby', icon: '🎟️' },
 		{ href: '/shop', key: 'nav.shop', icon: '🛍️' },
 		{ href: '/chat', key: 'nav.chat', icon: '💬' },
+		{ href: '/top', key: 'nav.top', icon: '🥇' },
 		{ href: '/trophies', key: 'nav.trophies', icon: '🏆' }
 	] as const;
 	// No chat for guests
