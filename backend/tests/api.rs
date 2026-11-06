@@ -1344,6 +1344,9 @@ async fn metrics_count_what_players_do_behind_a_token() {
     let name = unique("metered");
     let me = register(&app, &name, "UTC").await;
     post(&app, "/api/pocket/claim", &me).await;
+    set_xp(&name, 1500).await;
+    let charm = |kind: &str| json!({ "kind": "charm", "charm": { "kind": kind, "tier": "bronze" } });
+    post_json(&app, "/api/shop/buy", &me, charm("payout")).await;
     let won = known_ticket(
         &name,
         "lucky_three",
@@ -1352,6 +1355,7 @@ async fn metrics_count_what_players_do_behind_a_token() {
     )
     .await;
     post(&app, &format!("/api/tickets/{won}/scratch"), &me).await;
+    post_json(&app, "/api/shop/buy", &me, charm("discount")).await;
     post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "lucky_three" })).await;
     let req = test::TestRequest::post()
         .uri("/api/auth/login")
@@ -1373,7 +1377,13 @@ async fn metrics_count_what_players_do_behind_a_token() {
         r#"scratchme_tickets_issued_total{series="lucky_three",source="shop"} 1"#,
         r#"scratchme_tickets_finished_total{series="lucky_three",result="win"} 1"#,
         r#"scratchme_ticket_prize_coins_total{series="lucky_three"} 75"#,
-        r#"scratchme_coins_spent_total{reason="ticket"} 35"#,
+        r#"scratchme_coins_spent_total{reason="ticket"} 30"#,
+        r#"scratchme_coins_spent_total{reason="charm"} 90"#,
+        r#"scratchme_charms_bought_total{kind="payout",tier="bronze"} 1"#,
+        r#"scratchme_charm_uses_total{kind="payout"} 1"#,
+        r#"scratchme_charm_coins_total{kind="payout"} 15"#,
+        r#"scratchme_charm_coins_total{kind="discount"} 5"#,
+        r#"scratchme_coins_earned_total{reason="charm"} 15"#,
         r#"scratchme_http_requests_total{method="POST",route="/api/tickets/{id}/scratch",status="200"} 1"#,
     ] {
         assert!(text.contains(line), "missing {line}\n{text}");
@@ -1381,4 +1391,108 @@ async fn metrics_count_what_players_do_behind_a_token() {
     assert!(text.contains(r#"scratchme_players{kind="member"}"#));
     assert!(text.contains(r#"scratchme_players{kind="guest"}"#));
     assert!(text.contains("scratchme_db_pool_connections"));
+}
+
+/// The charm of `kind` the player wears, from /me
+async fn charm<S>(app: &S, me: &Cookie<'static>, kind: &str) -> Value
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let (_, body) = get(app, "/api/me", me).await;
+    body["charms"].as_array().unwrap().iter().find(|c| c["kind"] == kind).cloned().unwrap_or(Value::Null)
+}
+
+#[actix_web::test]
+async fn charms_discount_redraw_and_add_while_they_last() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("charm");
+    let me = register(&app, &name, "UTC").await;
+    set_coins(&name, 10_000).await;
+    let buy = |kind: &str, tier: &str| {
+        post_json(&app, "/api/shop/buy", &me, json!({ "kind": "charm", "charm": { "kind": kind, "tier": tier } }))
+    };
+    let (status, body) = buy("discount", "bronze").await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")));
+    set_xp(&name, 1500).await;
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    assert_eq!(shop["charms"].as_array().unwrap().len(), 9);
+
+    // Discount: a charge per ticket bought within its reach
+    let (status, body) = buy("discount", "bronze").await;
+    assert_eq!(status, 200);
+    assert_eq!(body["coins"], 10_000 - 40);
+    assert_eq!(body["charms"][0]["charges"], 5);
+    let (status, body) = buy("discount", "gold").await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("charm_active")), "one of a kind at a time");
+    let (_, body) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "lucky_three" })).await;
+    assert_eq!((body["price"].as_i64(), body["saved"].as_i64()), (Some(30), Some(5)));
+    assert_eq!(body["coins"], 10_000 - 40 - 30);
+    let (_, body) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "cash_wheel" })).await;
+    assert_eq!((body["price"].as_i64(), body["saved"].as_i64()), (Some(400), Some(0)), "beyond bronze's reach");
+    assert_eq!(charm(&app, &me, "discount").await["charges"], 4);
+
+    // Expired: gone, and another of the kind may be bought
+    diesel::sql_query("UPDATE charms SET expires_at = now() - interval '1 second' WHERE user_id = $1")
+        .bind::<diesel::sql_types::BigInt, _>(user_id(&name).await)
+        .execute(&mut conn().await)
+        .await
+        .unwrap();
+    assert_eq!(charm(&app, &me, "discount").await, Value::Null);
+    assert_eq!(buy("discount", "gold").await.0, 200);
+
+    // Payout: a charge per ticket finished, the bonus on its coins
+    assert_eq!(buy("payout", "gold").await.0, 200);
+    let layout = json!({ "cells": vec!["coin"; 9], "win": "coin" });
+    let win = known_ticket(&name, "lucky_three", layout.clone(), json!({ "kind": "coins", "amount": 100 })).await;
+    let (_, before) = get(&app, "/api/me", &me).await;
+    let (status, body) = post(&app, &format!("/api/tickets/{win}/scratch"), &me).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["charm_bonus"], 30);
+    assert_eq!(body["coins"].as_i64().unwrap(), before["coins"].as_i64().unwrap() + 130);
+    let payout = body["charms"].as_array().unwrap().iter().find(|c| c["kind"] == "payout").unwrap();
+    assert_eq!(payout["charges"], 11);
+
+    // Luck: a charge per losing ticket only; a second draw replaces the stored one
+    assert_eq!(buy("luck", "gold").await.0, 200);
+    let win = known_ticket(&name, "lucky_three", layout.clone(), json!({ "kind": "coins", "amount": 10 })).await;
+    post(&app, &format!("/api/tickets/{win}/scratch"), &me).await;
+    assert_eq!(charm(&app, &me, "luck").await["charges"], 12, "a win needs no luck");
+    let mut redrawn = 0;
+    for left in (0..12).rev() {
+        let lose = known_ticket(&name, "lucky_three", layout.clone(), json!({ "kind": "nothing" })).await;
+        let (_, body) = post(&app, &format!("/api/tickets/{lose}/scratch"), &me).await;
+        let luck = body["charms"].as_array().unwrap().iter().find(|c| c["kind"] == "luck").cloned();
+        assert_eq!(luck.map(|c| c["charges"].clone()).unwrap_or(json!(0)), left);
+        use schema::tickets;
+        let stored: Value = tickets::table.find(lose).select(tickets::prize).first(&mut conn().await).await.unwrap();
+        assert_eq!(stored, body["prize"], "what was paid is what is stored");
+        if body["second_chance"] == true {
+            redrawn += 1;
+            assert_ne!(body["layout"], layout);
+        } else {
+            assert_eq!(body["prize"]["kind"], "nothing");
+        }
+    }
+    eprintln!("{redrawn} of 12 drawn again");
+    assert_eq!(charm(&app, &me, "luck").await, Value::Null, "spent");
+}
+
+#[actix_web::test]
+async fn one_charm_of_a_kind_even_bought_at_once() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("charm2");
+    let me = register(&app, &name, "UTC").await;
+    set_coins(&name, 1_000).await;
+    set_xp(&name, 1500).await;
+    let buy = || {
+        post_json(&app, "/api/shop/buy", &me, json!({ "kind": "charm", "charm": { "kind": "luck", "tier": "silver" } }))
+    };
+    let (a, b) = futures_join(buy(), buy()).await;
+    let mut statuses = [a.0, b.0];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409]);
+    let (_, body) = get(&app, "/api/me", &me).await;
+    assert_eq!(body["coins"], 1_000 - 260, "the refused one paid nothing");
 }

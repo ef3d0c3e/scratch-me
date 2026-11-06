@@ -81,6 +81,14 @@ struct KindLabels {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+struct CharmLabels {
+    /// discount, luck, payout
+    kind: &'static str,
+    /// bronze, silver, gold
+    tier: &'static str,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct StatusLabels {
     status: &'static str,
 }
@@ -109,6 +117,9 @@ pub struct Metrics {
     achievements: Family<KeyLabels, Counter>,
     level_ups: Counter,
     cosmetics: Family<KindLabels, Counter>,
+    charms: Family<CharmLabels, Counter>,
+    charm_uses: Family<KindLabels, Counter>,
+    charm_coins: Family<KindLabels, Counter>,
     shouts: Counter,
     gifts: Counter,
     duels: Family<StatusLabels, Counter>,
@@ -146,6 +157,9 @@ impl Default for Metrics {
             achievements: Default::default(),
             level_ups: Default::default(),
             cosmetics: Default::default(),
+            charms: Default::default(),
+            charm_uses: Default::default(),
+            charm_coins: Default::default(),
             shouts: Default::default(),
             gifts: Default::default(),
             duels: Default::default(),
@@ -174,6 +188,13 @@ impl Default for Metrics {
         r.register("achievements", "Achievements earned, by achievement", m.achievements.clone());
         r.register("level_ups", "Levels reached", m.level_ups.clone());
         r.register("cosmetics_bought", "Cosmetics bought, by kind", m.cosmetics.clone());
+        r.register("charms_bought", "Charms bought, by kind and tier", m.charms.clone());
+        r.register("charm_uses", "Charm charges spent, by kind", m.charm_uses.clone());
+        r.register(
+            "charm_coins",
+            "Coins charms gave: taken off prices (discount), added to wins (payout)",
+            m.charm_coins.clone(),
+        );
         r.register("shouts", "Shoutbox messages posted", m.shouts.clone());
         r.register("gifts", "Tickets sent to another player", m.gifts.clone());
         r.register("duels", "Duels by what happened (open, accepted, declined, cancelled, expired)", m.duels.clone());
@@ -221,12 +242,12 @@ impl Metrics {
         self.earned("prize", coins);
     }
 
-    /// `reason`: start, prize, reward, envelope, pot, refund
+    /// `reason`: start, prize, reward, envelope, pot, refund, charm
     pub fn earned(&self, reason: &'static str, coins: i64) {
         self.coins_earned.get_or_create(&ReasonLabels { reason }).inc_by(coins.max(0) as u64);
     }
 
-    /// `reason`: ticket, gift, cosmetic, duel_stake
+    /// `reason`: ticket, gift, cosmetic, charm, duel_stake
     pub fn spent(&self, reason: &'static str, coins: i64) {
         self.coins_spent.get_or_create(&ReasonLabels { reason }).inc_by(coins.max(0) as u64);
     }
@@ -267,6 +288,22 @@ impl Metrics {
     pub fn cosmetic(&self, kind: &'static str, price: i64) {
         self.cosmetics.get_or_create(&KindLabels { kind }).inc();
         self.spent("cosmetic", price);
+    }
+
+    pub fn charm(&self, charm: crate::charms::Charm, price: i64) {
+        self.charms.get_or_create(&CharmLabels { kind: charm.kind.key(), tier: charm.tier.key() }).inc();
+        self.spent("charm", price);
+    }
+
+    /// A charge spent, and the coins it gave (none for luck: a second draw)
+    pub fn charm_used(&self, kind: crate::charms::Kind, coins: i64) {
+        self.charm_uses.get_or_create(&KindLabels { kind: kind.key() }).inc();
+        if coins > 0 {
+            self.charm_coins.get_or_create(&KindLabels { kind: kind.key() }).inc_by(coins as u64);
+        }
+        if kind == crate::charms::Kind::Payout {
+            self.earned("charm", coins);
+        }
     }
 
     pub fn shout(&self) {

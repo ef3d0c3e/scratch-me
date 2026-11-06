@@ -247,6 +247,10 @@
 				{/if}
 			</p>
 			<p class="sub">{sub}</p>
+			{#if result.second_chance}<p class="charm">{i18n.t('scratch.second_chance')}</p>{/if}
+			{#if result.charm_bonus > 0}
+				<p class="charm">{i18n.t('scratch.charm_bonus', { n: result.charm_bonus })}</p>
+			{/if}
 		{:else if !revealed}
 			<p class="hint">
 				{ticket.series === 'treasure_dig'
@@ -294,6 +298,13 @@
 {/if}
 
 <style>
+	.charm {
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--mint);
+		text-align: center;
+		margin-top: 2px;
+	}
 	.sheet {
 		/* Dragging a finger scratches; it must not select the text under it */
 		user-select: none;

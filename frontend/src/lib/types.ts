@@ -106,6 +106,35 @@ export interface MeDto {
 	/** What a pocket ticket is worth at most, at the player's level */
 	pocket_worth: number;
 	tickets: TicketDto[];
+	/** Charms worn now */
+	charms: WornCharm[];
+}
+
+export type CharmKind = 'discount' | 'luck' | 'payout';
+export type CharmTier = 'bronze' | 'silver' | 'gold';
+
+export interface Charm {
+	kind: CharmKind;
+	tier: CharmTier;
+}
+
+/** What a charm does: percent off, chance of a second draw, or coins added */
+interface CharmEffect extends Charm {
+	strength: number;
+	/** The dearest ticket it works on; null for any */
+	reach: number | null;
+}
+
+export interface WornCharm extends CharmEffect {
+	charges: number;
+	expires_at: string;
+}
+
+export interface CharmOffer extends CharmEffect {
+	price: number;
+	level: number;
+	charges: number;
+	minutes: number;
 }
 
 export interface LevelDto {
@@ -212,6 +241,12 @@ export interface Scratched {
 	tickets: TicketDto[];
 	/** The cosmetic won was already owned: coins instead */
 	duplicate: boolean;
+	/** A luck charm drew this losing ticket again */
+	second_chance: boolean;
+	/** Coins a payout charm added */
+	charm_bonus: number;
+	/** Charms worn after this ticket */
+	charms: WornCharm[];
 	progress: Progress;
 }
 
@@ -219,6 +254,7 @@ export interface ShopDto {
 	/** `until`: a seasonal series' last day on sale, as [month, day] */
 	tickets: { series: Series; price: number; level: number; until: [number, number] | null }[];
 	cosmetics: { item: Cosmetic; origin: Origin }[];
+	charms: CharmOffer[];
 }
 
 export interface Bought {
@@ -227,6 +263,11 @@ export interface Bought {
 	/** A gift went to this player */
 	gift_to?: string | null;
 	item: Cosmetic | null;
+	/** What was paid, and what a discount charm took off */
+	price: number;
+	saved: number;
+	/** Charms worn after this purchase */
+	charms: WornCharm[];
 	progress: Progress;
 }
 

@@ -39,10 +39,11 @@ cargo run -p scratchme-api -- make-admin <username>
 
 - Accounts (sign up, log in, log out), with the player's time zone
 - Lucky Three: a 3×3 grid where three of a kind wins coins, another ticket or a pocket refill
-- Pocket: one free ticket every 2 hours, holds 3
+- Pocket: one free ticket every 20 minutes, worth more as you level, holds 3
 - Daily envelope: one per calendar day, with a 7-day streak cycle
 - Scratch canvas: finger-speed brush, falling foil flakes, the rest falls off once every square is mostly scratched
 - Five ticket series (Lucky Three, Number Match, Ticket Chain, Cash Wheel, Golden Ticket), a shop, themes and scratch tools
+- Charms: discount, luck (a losing ticket may be drawn again) and payout, in bronze, silver and gold; each lasts a number of uses or a time window, one of each kind at a time, and never makes play profitable
 - Celebrations scaled to the prize, scratch sound and haptics, tilt shimmer
 - Levels, daily quests, achievements
 - Shoutbox and live feed of big wins over a WebSocket, announcements, profiles and titles
@@ -68,13 +69,16 @@ Every metric is prefixed `scratchme_`. Counters are counted once the action's tr
 | `tickets_issued_total` | series, source | Tickets given: pocket, envelope, prize, shop, reward, gift, duel |
 | `tickets_finished_total` | series, result (win, lose) | Tickets scratched or played to the end |
 | `ticket_prize_coins_total` | series | Coins tickets paid: divided by tickets finished, the payout per ticket |
-| `coins_earned_total` | reason (start, prize, reward, envelope, pot, refund) | Coins entering balances |
-| `coins_spent_total` | reason (ticket, gift, cosmetic, duel_stake) | Coins leaving balances |
+| `coins_earned_total` | reason (start, prize, reward, envelope, pot, refund, charm) | Coins entering balances |
+| `coins_spent_total` | reason (ticket, gift, cosmetic, charm, duel_stake) | Coins leaving balances |
 | `pocket_claims_total`, `envelope_opens_total` | | Free drops taken |
 | `quests_done_total` | key (quest, or bonus) | Daily quests finished |
 | `achievements_total` | key | Achievements earned |
 | `level_ups_total` | | Levels reached |
 | `cosmetics_bought_total` | kind | Themes, tools, foils bought |
+| `charms_bought_total` | kind, tier | Charms bought |
+| `charm_uses_total` | kind | Charm charges spent |
+| `charm_coins_total` | kind | Coins charms gave: taken off prices (discount), added to wins (payout) |
 | `shouts_total`, `gifts_total` | | Shoutbox messages, tickets sent to others |
 | `duels_total` | status (open, accepted, declined, cancelled, expired) | Duels |
 | `pot_entries_total`, `pots_won_total` | | Daily pot entries, pots drawn with a winner |

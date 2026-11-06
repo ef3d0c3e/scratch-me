@@ -525,5 +525,35 @@ export default {
 	'top.rank': 'Rang {n}',
 	'top.empty': 'Personne au classement pour l’instant',
 	'top.you': 'Votre place',
-	'top.guest': 'Les invités ne sont pas classés : inscrivez-vous pour prendre votre place.'
+	'top.guest': 'Les invités ne sont pas classés : inscrivez-vous pour prendre votre place.',
+
+	'shop.charms': 'Porte-bonheur',
+	'shop.charms_lead':
+		'Ils boostent votre jeu un moment : un nombre d’utilisations, ou jusqu’à la fin du temps. Un porte-bonheur de chaque sorte à la fois.',
+	'shop.charm_worn': 'Porté : {left} · {time}',
+	'charm.discount': 'Porte-bonheur des soldes',
+	'charm.luck': 'Trèfle',
+	'charm.payout': 'Toucher de Midas',
+	'charm.discount.effect': '{n} % de réduction sur les tickets achetés',
+	'charm.luck.effect': '{n} % de chances qu’un ticket perdant soit retiré',
+	'charm.payout.effect': '+{n} % de pièces sur chaque gain',
+	'charm.discount.use': 'Une utilisation par ticket acheté, cadeaux compris.',
+	'charm.luck.use': 'Une utilisation par ticket perdant. Pas sur les tickets joués coup par coup.',
+	'charm.payout.use': 'Une utilisation par ticket terminé.',
+	'charm.tier.bronze': 'Bronze',
+	'charm.tier.silver': 'Argent',
+	'charm.tier.gold': 'Or',
+	'charm.uses_one': '{n} utilisation',
+	'charm.uses_other': '{n} utilisations',
+	'charm.left_one': '{n} utilisation restante',
+	'charm.left_other': '{n} utilisations restantes',
+	'charm.reach': 'tickets jusqu’à 🪙 {n}',
+	'charm.reach_any': 'tous les tickets',
+	'charm.worn_title': 'Porte-bonheur actifs',
+	'charm.buy': 'Acheter {name} {tier}',
+	'scratch.second_chance': '🍀 Seconde chance : votre trèfle a retiré ce ticket',
+	'scratch.charm_bonus': '💰 +{n} pièces grâce à votre porte-bonheur',
+	'shop.saved': '{n} de moins grâce à votre porte-bonheur',
+	'errors.charm_active':
+		'Vous portez déjà un porte-bonheur de cette sorte. Il doit d’abord s’épuiser.'
 } satisfies Record<keyof typeof en, string>;

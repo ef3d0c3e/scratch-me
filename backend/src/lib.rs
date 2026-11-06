@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod charms;
 pub mod config;
 pub mod cosmetics;
 pub mod db;

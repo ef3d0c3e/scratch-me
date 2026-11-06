@@ -4,7 +4,10 @@
 	import { post } from '#lib/api.ts';
 	import { getSession } from '#lib/session.svelte.ts';
 	import { SERIES_LOOK, cosmeticKey } from '#lib/series.ts';
-	import type { Bought, Cosmetic, MeDto, TicketDto } from '#lib/types.ts';
+	import type { Bought, Charm, CharmKind, Cosmetic, MeDto, TicketDto } from '#lib/types.ts';
+	import { CHARM_ICON, CHARM_KINDS, duration, going, ticketPrice } from '#lib/charms.ts';
+	import { countdown } from '#lib/time.ts';
+	import { onMount } from 'svelte';
 	import { achievementName } from '#lib/prize.ts';
 	import CosmeticBadge from '#lib/components/CosmeticBadge.svelte';
 
@@ -35,6 +38,18 @@
 				: session.me.foil === item.id;
 	const keyOf = (item: Cosmetic) => `${item.kind}:${item.id}`;
 
+	/** Ticks so prices and charms follow a charm running out */
+	let now = $state(Date.now());
+	onMount(() => {
+		const id = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(id);
+	});
+	const charmGroups = CHARM_KINDS.map((kind) => ({
+		kind,
+		offers: data.shop.charms.filter((c) => c.kind === kind)
+	}));
+	const wornOf = (kind: CharmKind) => going(session.me.charms, now).find((c) => c.kind === kind);
+
 	async function run(key: string, f: () => Promise<void>) {
 		busy = key;
 		error = '';
@@ -52,10 +67,22 @@
 		run(series, async () => {
 			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series });
 			session.apply(r.progress);
+			session.me.charms = r.charms;
 			if (r.ticket) {
 				session.add([r.ticket]);
 				bought = r.ticket;
 			}
+		});
+
+	const buyCharm = (charm: Charm) =>
+		run(`${charm.kind}:${charm.tier}`, async () => {
+			const r = await post<Bought>('/shop/buy', { kind: 'charm', charm });
+			session.apply(r.progress);
+			session.me.charms = r.charms;
+			bought = null;
+			notice = i18n.t('shop.got', {
+				name: `${i18n.t(`charm.tier.${charm.tier}`)} ${i18n.t(`charm.${charm.kind}`)}`
+			});
 		});
 
 	const buyCosmetic = (item: Cosmetic) =>
@@ -130,15 +157,79 @@
 					{#if session.me.level.level < offer.level}
 						<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
 					{:else}
+						{@const cost = ticketPrice(session.me.charms, offer.price, now)}
 						<button
 							type="button"
 							class="btn small primary"
-							disabled={busy !== null || session.me.coins < offer.price}
+							disabled={busy !== null || session.me.coins < cost.price}
 							onclick={() => buyTicket(offer.series)}
 							aria-label="{i18n.t('shop.buy')} {i18n.t(`series.${offer.series}`)}"
-							>🪙 {i18n.num(offer.price)}</button
+							title={cost.saved ? i18n.t('shop.saved', { n: cost.saved }) : undefined}
+							>{#if cost.saved}<s class="was">{i18n.num(offer.price)}</s>{/if}🪙 {i18n.num(
+								cost.price
+							)}</button
 						>
 					{/if}
+				</li>
+			{/each}
+		</ul>
+	</section>
+
+	<section aria-labelledby="charms-title" class="charm-shop">
+		<h2 id="charms-title">{i18n.t('shop.charms')}</h2>
+		<p class="lead">{i18n.t('shop.charms_lead')}</p>
+		<ul class="offers">
+			{#each charmGroups as group (group.kind)}
+				{@const worn = wornOf(group.kind)}
+				<li class="offer charm" data-charm={group.kind}>
+					<div class="charm-head">
+						<span class="charm-icon" aria-hidden="true">{CHARM_ICON[group.kind]}</span>
+						<div>
+							<h3>{i18n.t(`charm.${group.kind}`)}</h3>
+							<p>{i18n.t(`charm.${group.kind}.use`)}</p>
+						</div>
+					</div>
+					{#if worn}
+						<p class="worn {worn.tier}">
+							{i18n.t(`charm.tier.${worn.tier}`)} ·
+							{i18n.t('shop.charm_worn', {
+								left: i18n.t('charm.left', { n: worn.charges }),
+								time: countdown(worn.expires_at, now)
+							})}
+						</p>
+					{/if}
+					<div class="tiers">
+						{#each group.offers as offer (offer.tier)}
+							<div class="tier {offer.tier}" data-tier={offer.tier}>
+								<b>{i18n.t(`charm.tier.${offer.tier}`)}</b>
+								<span class="effect"
+									>{i18n.t(`charm.${offer.kind}.effect`, { n: offer.strength })}</span
+								>
+								<span class="terms"
+									>{i18n.t('charm.uses', { n: offer.charges })} · {duration(offer.minutes)}</span
+								>
+								<span class="terms"
+									>{offer.reach === null
+										? i18n.t('charm.reach_any')
+										: i18n.t('charm.reach', { n: offer.reach })}</span
+								>
+								{#if session.me.level.level < offer.level}
+									<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
+								{:else}
+									<button
+										type="button"
+										class="btn small primary"
+										disabled={busy !== null || !!worn || session.me.coins < offer.price}
+										onclick={() => buyCharm({ kind: offer.kind, tier: offer.tier })}
+										aria-label={i18n.t('charm.buy', {
+											tier: i18n.t(`charm.tier.${offer.tier}`),
+											name: i18n.t(`charm.${offer.kind}`)
+										})}>🪙 {i18n.num(offer.price)}</button
+									>
+								{/if}
+							</div>
+						{/each}
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -338,5 +429,79 @@
 	}
 	.tag.locked {
 		color: var(--muted);
+	}
+	.was {
+		opacity: 0.6;
+		margin-right: 4px;
+		font-weight: 500;
+	}
+	.charm-shop .lead {
+		margin: -4px 0 10px;
+		font-size: 13px;
+	}
+	.offer.charm {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.charm-head {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.charm-head h3 {
+		font: 700 16px/1.2 var(--body);
+	}
+	.charm-head p {
+		font-size: 12px;
+		color: var(--muted);
+		margin-top: 2px;
+	}
+	.charm-icon {
+		font-size: 30px;
+	}
+	.worn {
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--mint);
+	}
+	.tiers {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.tier {
+		--tier: #cd8a4b;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 8px;
+		border-radius: 12px;
+		border: 1px solid var(--tier);
+		text-align: center;
+		font-size: 12px;
+	}
+	.tier.silver {
+		--tier: #c9d1dc;
+	}
+	.tier.gold {
+		--tier: var(--gold);
+	}
+	.tier b {
+		color: var(--tier);
+		font-size: 13px;
+	}
+	.tier .effect {
+		font-weight: 700;
+		flex: 1;
+	}
+	.tier .terms {
+		color: var(--muted);
+	}
+	.tier .btn {
+		margin-top: 4px;
+	}
+	.tier .tag {
+		min-height: 0;
 	}
 </style>

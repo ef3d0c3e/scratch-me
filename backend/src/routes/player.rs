@@ -53,6 +53,8 @@ pub struct MeDto {
     pub guest: bool,
     /// Unscratched tickets, oldest first
     pub tickets: Vec<TicketDto>,
+    /// Charms worn now
+    pub charms: Vec<super::charms::WornCharm>,
 }
 
 /// coins, tz, pocket count and time, theme, tool, foil, xp, title, admin
@@ -97,6 +99,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         .select((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
         .load(&mut conn)
         .await?;
+    let charms = super::charms::worn(&mut conn, user.id).await?;
 
     let now = Utc::now();
     let tz = parse_tz(Some(&tz));
@@ -126,6 +129,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         is_admin,
         guest: user.is_guest,
         tickets: held,
+        charms,
     }))
 }
 

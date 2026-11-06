@@ -73,6 +73,7 @@ export class Session {
 		this.me.tickets = this.me.tickets.filter((t) => t.id !== r.id);
 		this.add(r.tickets);
 		this.apply(r.progress);
+		this.me.charms = r.charms;
 		if (r.prize.kind === 'cosmetic' && !r.duplicate)
 			this.me.owned = [...this.me.owned, r.prize.item];
 		if (r.prize.kind === 'pocket_refill') void this.refresh().catch(() => {});

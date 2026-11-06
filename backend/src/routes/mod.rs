@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, get, web};
 
 use crate::auth;
 
+pub mod charms;
 pub mod duels;
 pub mod leaderboard;
 pub mod player;

@@ -34,6 +34,7 @@
 		try {
 			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series: 'pot_ticket' });
 			session.apply(r.progress);
+			session.me.charms = r.charms;
 			if (r.ticket) session.add([r.ticket]);
 			await load();
 		} catch (err) {

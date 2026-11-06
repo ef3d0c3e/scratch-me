@@ -8,6 +8,7 @@
 	import QuestsCard from '#lib/components/QuestsCard.svelte';
 	import PotCard from '#lib/components/PotCard.svelte';
 	import DuelsCard from '#lib/components/DuelsCard.svelte';
+	import CharmsWorn from '#lib/components/CharmsWorn.svelte';
 	import { getLive } from '#lib/live.svelte.ts';
 	import { feedText } from '#lib/prize.ts';
 	import { getSession } from '#lib/session.svelte.ts';
@@ -190,6 +191,8 @@
 	</section>
 
 	{#if error}<p class="err" role="alert">{error}</p>{/if}
+
+	<CharmsWorn />
 
 	<section class="drops">
 		<article class="drop pocket" class:ready={me.pocket.count > 0}>

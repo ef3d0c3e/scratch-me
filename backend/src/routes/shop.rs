@@ -6,10 +6,12 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
+use super::charms::{self as worn, WornCharm};
 use super::pot;
 use super::tickets::{TicketDto, issue};
 use crate::AppState;
 use crate::auth::CurrentUser;
+use crate::charms::Charm;
 use crate::cosmetics::{Cosmetic, Origin};
 use crate::error::{ApiError, ApiResult};
 use crate::progress::{self, Event, Progress, levels};
@@ -33,10 +35,27 @@ pub struct CosmeticOffer {
     pub origin: Origin,
 }
 
+/// A charm for sale: what it does, for how long, and on which tickets
+#[derive(Debug, Serialize)]
+pub struct CharmOffer {
+    #[serde(flatten)]
+    pub charm: Charm,
+    pub price: i64,
+    pub level: i32,
+    /// Percent: off, chance of a second draw, or coins added
+    pub strength: i64,
+    pub charges: i32,
+    /// How long it lasts, in minutes
+    pub minutes: i64,
+    /// The dearest ticket it works on; None for any
+    pub reach: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ShopDto {
     pub tickets: Vec<TicketOffer>,
     pub cosmetics: Vec<CosmeticOffer>,
+    pub charms: Vec<CharmOffer>,
 }
 
 #[get("/shop")]
@@ -51,7 +70,16 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
         })
     });
     let cosmetics = Cosmetic::all().into_iter().map(|item| CosmeticOffer { item, origin: item.origin() });
-    web::Json(ShopDto { tickets: tickets.collect(), cosmetics: cosmetics.collect() })
+    let charms = Charm::all().into_iter().map(|charm| CharmOffer {
+        charm,
+        price: charm.price(),
+        level: charm.tier.level(),
+        strength: charm.strength(),
+        charges: charm.tier.charges(),
+        minutes: charm.tier.lasts().num_minutes(),
+        reach: charm.tier.reach(),
+    });
+    web::Json(ShopDto { tickets: tickets.collect(), cosmetics: cosmetics.collect(), charms: charms.collect() })
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +94,9 @@ pub enum Buy {
     Cosmetic {
         item: Cosmetic,
     },
+    Charm {
+        charm: Charm,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -75,29 +106,50 @@ pub struct Bought {
     pub item: Option<Cosmetic>,
     /// A gift went to this player
     pub gift_to: Option<String>,
+    /// What was paid
+    pub price: i64,
+    /// Coins a discount charm took off the price
+    pub saved: i64,
+    /// Charms worn after this purchase
+    pub charms: Vec<WornCharm>,
     pub progress: Progress,
 }
 
 #[post("/shop/buy")]
 pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<Buy>) -> ApiResult<web::Json<Bought>> {
     let buy = body.into_inner();
-    let price = match &buy {
+    let list_price = match &buy {
         Buy::Ticket { series, .. } => series.price(),
         Buy::Cosmetic { item } => item.price(),
+        Buy::Charm { charm } => Some(charm.price()),
     }
     .ok_or(ApiError::Invalid("not_for_sale"))?;
+    let bought = if let Buy::Charm { charm } = &buy { Some(*charm) } else { None };
     let mut conn = state.pool.get().await?;
     let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {
-            if let Buy::Ticket { series, .. } = &buy {
-                if !series.in_season(Utc::now().date_naive()) {
-                    return Err(ApiError::Conflict("out_of_season"));
+            let mut price = list_price;
+            let mut saved = 0;
+            match &buy {
+                Buy::Ticket { series, .. } => {
+                    if !series.in_season(Utc::now().date_naive()) {
+                        return Err(ApiError::Conflict("out_of_season"));
+                    }
+                    let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
+                    if levels::level_for(xp) < levels::shop_level(*series) {
+                        return Err(ApiError::Conflict("level_too_low"));
+                    }
+                    // Spent here, given back with the rest if the purchase fails
+                    (price, saved) = worn::discount(conn, user.id, *series, list_price).await?;
                 }
-                let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
-                if levels::level_for(xp) < levels::shop_level(*series) {
-                    return Err(ApiError::Conflict("level_too_low"));
+                Buy::Charm { charm } => {
+                    let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
+                    if levels::level_for(xp) < charm.tier.level() {
+                        return Err(ApiError::Conflict("level_too_low"));
+                    }
                 }
+                Buy::Cosmetic { .. } => {}
             }
             // Pays only if the coins are there: two buys at once cannot both spend them
             let coins: Option<i64> = diesel::update(users::table.find(user.id).filter(users::coins.ge(price)))
@@ -134,8 +186,17 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                         pot::enter(conn, rid).await?;
                     }
                     let progress = progress::apply(conn, user.id, &[Event::Bought(series), Event::Gifted]).await?;
-                    Ok(Bought { coins: progress.coins, ticket: None, item: None, gift_to: Some(rname), progress }
-                        .with_gift(rid, ticket))
+                    Ok(Bought {
+                        coins: progress.coins,
+                        ticket: None,
+                        item: None,
+                        gift_to: Some(rname),
+                        price,
+                        saved,
+                        charms: worn::worn(conn, user.id).await?,
+                        progress,
+                    }
+                    .with_gift(rid, ticket))
                 }
                 Buy::Ticket { series, to: None } => {
                     let ticket = issue(conn, user.id, series, Source::Shop, 1).await?.pop();
@@ -143,7 +204,20 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                         pot::enter(conn, user.id).await?;
                     }
                     let progress = progress::apply(conn, user.id, &[Event::Bought(series)]).await?;
-                    Ok((Bought { coins: progress.coins, ticket, item: None, gift_to: None, progress }, None))
+                    let charms = worn::worn(conn, user.id).await?;
+                    Ok((
+                        Bought {
+                            coins: progress.coins,
+                            ticket,
+                            item: None,
+                            gift_to: None,
+                            price,
+                            saved,
+                            charms,
+                            progress,
+                        },
+                        None,
+                    ))
                 }
                 Buy::Cosmetic { item } => {
                     let added = diesel::insert_into(cosmetics::table)
@@ -161,8 +235,37 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                     }
                     // Owning more may earn the collector achievement
                     let progress = progress::apply(conn, user.id, &[]).await?;
+                    let charms = worn::worn(conn, user.id).await?;
                     Ok((
-                        Bought { coins: progress.coins, ticket: None, item: Some(item), gift_to: None, progress },
+                        Bought {
+                            coins: progress.coins,
+                            ticket: None,
+                            item: Some(item),
+                            gift_to: None,
+                            price,
+                            saved,
+                            charms,
+                            progress,
+                        },
+                        None,
+                    ))
+                }
+                Buy::Charm { charm } => {
+                    // Refused while one of its kind still goes: rolls the payment back
+                    worn::wear(conn, user.id, charm).await?;
+                    let progress = progress::apply(conn, user.id, &[]).await?;
+                    let charms = worn::worn(conn, user.id).await?;
+                    Ok((
+                        Bought {
+                            coins: progress.coins,
+                            ticket: None,
+                            item: None,
+                            gift_to: None,
+                            price,
+                            saved,
+                            charms,
+                            progress,
+                        },
                         None,
                     ))
                 }
@@ -172,14 +275,19 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
     let (out, gift) = out;
     // Committed: counted
     let m = &state.metrics;
-    match (&out.item, &gift) {
-        (Some(item), _) => m.cosmetic(item.kind(), price),
-        (None, Some((_, ticket))) => {
+    let price = out.price;
+    if out.saved > 0 {
+        m.charm_used(crate::charms::Kind::Discount, out.saved);
+    }
+    match (&bought, &out.item, &gift) {
+        (Some(charm), _, _) => m.charm(*charm, price),
+        (None, Some(item), _) => m.cosmetic(item.kind(), price),
+        (None, None, Some((_, ticket))) => {
             m.spent("gift", price);
             m.gift();
             m.issued(std::slice::from_ref(ticket));
         }
-        (None, None) => {
+        (None, None, None) => {
             m.spent("ticket", price);
             m.issued(out.ticket.as_slice());
         }

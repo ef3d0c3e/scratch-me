@@ -50,6 +50,7 @@
 		act(async () => {
 			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series: gift, to: p.username });
 			session.apply(r.progress);
+			session.me.charms = r.charms;
 			giving = false;
 			return i18n.t('profile.gift_sent', {
 				series: i18n.t(`series.${gift as Series}`),

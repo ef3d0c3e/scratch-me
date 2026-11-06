@@ -12,6 +12,7 @@ use crate::cosmetics::DUPLICATE_COINS;
 use crate::error::{ApiError, ApiResult};
 use crate::pocket;
 use crate::progress::{self, Event, Progress, Scratch};
+use crate::routes::charms::{self, Boost, WornCharm};
 use crate::schema::{aquarium, cosmetics, tickets, users};
 use crate::tickets::play;
 use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
@@ -182,7 +183,15 @@ pub struct Scratched {
     pub tickets: Vec<TicketDto>,
     /// The cosmetic won was already owned: coins instead
     pub duplicate: bool,
+    /// A luck charm drew this losing ticket again: the layout and prize are the new draw
+    pub second_chance: bool,
+    /// Coins a payout charm added to the prize
+    pub charm_bonus: i64,
+    /// Charms worn after this ticket
+    pub charms: Vec<WornCharm>,
     pub progress: Progress,
+    #[serde(skip)]
+    pub(crate) boost: Boost,
 }
 
 /// Uncovers a ticket: its layout, and the prize credited, once
@@ -211,7 +220,7 @@ pub async fn scratch(
             .get_result(conn)
             .await
             .optional()?;
-            let Some((series, layout, prize)) = row else {
+            let Some((series, mut layout, prize)) = row else {
                 let exists: bool = diesel::select(diesel::dsl::exists(
                     tickets::table.filter(tickets::id.eq(id)).filter(tickets::user_id.eq(uid)),
                 ))
@@ -230,14 +239,17 @@ pub async fn scratch(
                     ApiError::Conflict("already_scratched")
                 });
             };
-            let prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
-            let g = grant(conn, uid, &prize, Source::Prize).await?;
+            let mut prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
             let kind = Series::parse(&series).ok_or_else(|| ApiError::Internal(anyhow::anyhow!("series {series}")))?;
+            let mut boost = Boost::default();
+            charms::luck(conn, uid, id, kind, &mut layout, &mut prize, &mut boost).await?;
+            let g = grant(conn, uid, &prize, Source::Prize).await?;
+            charms::payout(conn, uid, kind, &prize, &mut boost).await?;
             if kind == Series::Fishing {
                 record_catch(conn, uid, &layout).await?;
             }
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
-            let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra));
+            let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra + boost.bonus));
             let progress = progress::apply(conn, uid, &[event]).await?;
             Ok::<_, ApiError>(Scratched {
                 id,
@@ -247,7 +259,11 @@ pub async fn scratch(
                 coins: progress.coins,
                 tickets: g.tickets,
                 duplicate: g.duplicate,
+                second_chance: boost.second_chance,
+                charm_bonus: boost.bonus,
+                charms: charms::worn(conn, uid).await?,
                 progress,
+                boost,
             })
         })
         .await?;
@@ -256,8 +272,9 @@ pub async fn scratch(
     state.metrics.finished(&out.series, &out.prize, extra);
     state.metrics.issued(&out.tickets);
     state.metrics.progress(&out.progress);
+    out.boost.count(&state.metrics);
     if let Some(series) = Series::parse(&out.series) {
-        let s = Scratch::of(series, &out.layout, &out.prize, extra);
+        let s = Scratch::of(series, &out.layout, &out.prize, extra + out.charm_bonus);
         crate::live::broadcast(&state.live, &user.username, Some((series, &s, &out.prize)), &out.progress.achievements);
     }
     Ok(web::Json(out))
@@ -383,7 +400,9 @@ async fn finish(
         .execute(conn)
         .await?;
     let g = grant(conn, uid, &prize, Source::Prize).await?;
-    let event = Event::Scratched(Scratch::of(series, &layout, &prize, 0));
+    let mut boost = Boost::default();
+    charms::payout(conn, uid, series, &prize, &mut boost).await?;
+    let event = Event::Scratched(Scratch::of(series, &layout, &prize, boost.bonus));
     let progress = progress::apply(conn, uid, &[event]).await?;
     Ok(Scratched {
         id,
@@ -393,7 +412,11 @@ async fn finish(
         coins: progress.coins,
         tickets: g.tickets,
         duplicate: false,
+        second_chance: false,
+        charm_bonus: boost.bonus,
+        charms: charms::worn(conn, uid).await?,
         progress,
+        boost,
     })
 }
 
@@ -402,7 +425,8 @@ fn announce(state: &AppState, user: &str, series: Series, done: &Scratched) {
     state.metrics.finished(series.key(), &done.prize, 0);
     state.metrics.issued(&done.tickets);
     state.metrics.progress(&done.progress);
-    let s = Scratch::of(series, &done.layout, &done.prize, 0);
+    done.boost.count(&state.metrics);
+    let s = Scratch::of(series, &done.layout, &done.prize, done.charm_bonus);
     crate::live::broadcast(&state.live, user, Some((series, &s, &done.prize)), &done.progress.achievements);
 }
 
