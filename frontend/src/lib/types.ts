@@ -45,6 +45,9 @@ export interface MeDto {
 	/** Cosmetics owned besides the defaults */
 	owned: Cosmetic[];
 	level: LevelDto;
+	/** The achievement shown next to their name */
+	title: string | null;
+	is_admin: boolean;
 	tickets: TicketDto[];
 }
 
@@ -169,4 +172,57 @@ export interface EnvelopeClaim {
 	coins: number;
 	tickets: TicketDto[];
 	progress: Progress;
+}
+
+export interface ChatEvent {
+	id: number;
+	user: string;
+	level: number;
+	title: string | null;
+	body: string;
+	at: string;
+}
+
+export interface WinEvent {
+	user: string;
+	series: Series;
+	prize: Prize;
+	at: string;
+}
+
+export interface FeatEvent {
+	user: string;
+	/** The achievement earned */
+	id: string;
+	at: string;
+}
+
+export type FeedItem = ({ type: 'win' } & WinEvent) | ({ type: 'feat' } & FeatEvent);
+
+export interface AnnouncementDto {
+	id: number;
+	body: string;
+	at: string;
+}
+
+export interface Shouted {
+	shout: ChatEvent;
+	progress: Progress;
+}
+
+export interface ProfileDto {
+	username: string;
+	level: LevelDto;
+	title: string | null;
+	theme: ThemeId;
+	joined: string;
+	online: boolean;
+	scratched: number;
+	wins: number;
+	best_win: number;
+	best_streak: number;
+	/** Achievements earned, newest first */
+	achievements: string[];
+	/** The viewer muted them */
+	muted: boolean;
 }

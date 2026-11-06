@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { setLive } from '#lib/live.svelte.ts';
 	import type { LayoutProps } from './$types';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { setSession } from '#lib/session.svelte.ts';
@@ -14,6 +16,20 @@
 	const i18n = getI18n();
 	// svelte-ignore state_referenced_locally
 	const session = setSession(data.me);
+	const live = setLive();
+	onMount(() => {
+		live.start();
+		return () => live.stop();
+	});
+	// A ticket on screen: our own big win waits for the reveal before it hits the feed
+	$effect(() => {
+		if (session.open) live.hold(session.me.username);
+		else live.release();
+	});
+	$effect(() => {
+		live.chatOpen = page.url.pathname === '/chat';
+		if (live.chatOpen) live.unread = 0;
+	});
 
 	// The theme worn: on the page now, and in a cookie so the server renders it next time
 	$effect(() => {
@@ -25,6 +41,7 @@
 	const tabs = [
 		{ href: '/', key: 'nav.lobby', icon: '🎟️' },
 		{ href: '/shop', key: 'nav.shop', icon: '🛍️' },
+		{ href: '/chat', key: 'nav.chat', icon: '💬' },
 		{ href: '/trophies', key: 'nav.trophies', icon: '🏆' }
 	] as const;
 	const left = $derived(
@@ -55,6 +72,9 @@
 			>
 				<span aria-hidden="true">{tab.icon}</span>
 				{i18n.t(tab.key)}
+				{#if tab.href === '/chat' && live.unread > 0}
+					<span class="unread" data-testid="unread">{live.unread > 9 ? '9+' : live.unread}</span>
+				{/if}
 			</a>
 		{/each}
 	</nav>
@@ -142,16 +162,32 @@
 	}
 	.tabs a {
 		flex: 1 1 0;
-		max-width: 160px;
+		max-width: 130px;
+		flex-direction: column;
+		gap: 0;
+		font-size: 12px;
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		min-height: 48px;
+		min-height: 52px;
 		border-radius: 14px;
 		color: var(--muted);
 		font-weight: 700;
 		text-decoration: none;
+	}
+	.unread {
+		min-width: 20px;
+		height: 20px;
+		padding: 0 6px;
+		border-radius: 99px;
+		display: grid;
+		place-items: center;
+		font-size: 11px;
+		font-weight: 800;
+		color: #fff;
+		background: var(--pink);
 	}
 	.tabs a.current {
 		color: var(--ink);

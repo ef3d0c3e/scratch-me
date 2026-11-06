@@ -6,6 +6,8 @@
 	import type { EnvelopeClaim, PocketClaim } from '#lib/types.ts';
 	import { ticketsText } from '#lib/prize.ts';
 	import QuestsCard from '#lib/components/QuestsCard.svelte';
+	import { getLive } from '#lib/live.svelte.ts';
+	import { feedText } from '#lib/prize.ts';
 	import { getSession } from '#lib/session.svelte.ts';
 	import { getFx } from '#lib/fx/fx.svelte.ts';
 	import { SERIES_LOOK } from '#lib/series.ts';
@@ -14,6 +16,25 @@
 	const fx = getFx();
 
 	const session = getSession();
+	const live = getLive();
+	/** Announcements this browser closed (kept per browser, best effort) */
+	let dismissed = $state<number[]>([]);
+	onMount(() => {
+		try {
+			dismissed = JSON.parse(localStorage.getItem('scratchme:dismissed') ?? '[]');
+		} catch {
+			dismissed = [];
+		}
+	});
+	function dismiss(id: number) {
+		dismissed = [...dismissed, id];
+		try {
+			localStorage.setItem('scratchme:dismissed', JSON.stringify(dismissed.slice(-50)));
+		} catch {
+			// Not kept: it comes back next visit
+		}
+	}
+	const notice = $derived(live.announcements.find((a) => !dismissed.includes(a.id)));
 	const me = $derived(session.me);
 	let now = $state(Date.now());
 	let busy = $state<'pocket' | 'envelope' | null>(null);
@@ -109,6 +130,23 @@
 <svelte:head><title>Scratch-me</title></svelte:head>
 
 <div class="lobby">
+	{#if notice}
+		<aside class="notice" aria-label={i18n.t('lobby.announcement')}>
+			<span aria-hidden="true">📣</span>
+			<p>{notice.body}</p>
+			<button type="button" onclick={() => dismiss(notice.id)} aria-label={i18n.t('scratch.close')}
+				>✕</button
+			>
+		</aside>
+	{/if}
+	{#if live.feed[0]}
+		{#key live.feed[0].at + live.feed[0].user}
+			<p class="ticker" data-testid="ticker">
+				<span aria-hidden="true">{live.feed[0].type === 'win' ? '💰' : '🏆'}</span>
+				{feedText(i18n, live.feed[0])}
+			</p>
+		{/key}
+	{/if}
 	<section class="stack" aria-labelledby="stack-title">
 		{#if stack.length}
 			<!-- A big tap target for the same action as the button below -->
@@ -219,7 +257,7 @@
 	<QuestsCard />
 
 	<footer class="foot">
-		<span>{me.username}</span>
+		<a href="/players/{encodeURIComponent(me.username)}">{me.username}</a>
 		<button
 			type="button"
 			class="toggle"
@@ -240,6 +278,41 @@
 </div>
 
 <style>
+	.notice {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		padding: 12px 14px;
+		border-radius: 16px;
+		background: linear-gradient(135deg, var(--pink), #b8336a);
+		color: #fff;
+		font-weight: 600;
+	}
+	.notice p {
+		flex: 1;
+		overflow-wrap: anywhere;
+	}
+	.notice button {
+		border: 0;
+		background: rgba(255, 255, 255, 0.2);
+		border-radius: 50%;
+		width: 28px;
+		height: 28px;
+		color: #fff;
+	}
+	.ticker {
+		margin: -8px 0;
+		font-size: 13px;
+		color: var(--muted);
+		text-align: center;
+		animation: tick-in 0.5s ease both;
+	}
+	@keyframes tick-in {
+		from {
+			opacity: 0;
+			transform: translateY(-6px);
+		}
+	}
 	.lobby {
 		display: flex;
 		flex-direction: column;

@@ -1,6 +1,6 @@
 import type { I18n } from './i18n/index.svelte.ts';
 import { cosmeticKey } from './series.ts';
-import type { Prize, Series } from './types.ts';
+import type { FeedItem, Prize, Series } from './types.ts';
 
 /** "2 × Lucky Three + Golden Ticket" */
 export function ticketsText(i18n: I18n, series: Series[]) {
@@ -27,4 +27,19 @@ export function prizeText(i18n: I18n, p: Prize): string {
 		case 'cosmetic':
 			return i18n.t(cosmeticKey(p.item));
 	}
+}
+
+/** An achievement's name, or its id when the dictionary does not know it */
+export const achievementName = (i18n: I18n, id: string) =>
+	i18n.has(`achievement.${id}`) ? i18n.t(`achievement.${id}` as never) : id;
+
+/** A line of the live feed: "ana won 1,000 coins on Lucky Three" */
+export function feedText(i18n: I18n, item: FeedItem): string {
+	if (item.type === 'feat')
+		return i18n.t('feed.feat', { user: item.user, what: achievementName(i18n, item.id) });
+	return i18n.t('feed.win', {
+		user: item.user,
+		what: prizeText(i18n, item.prize).replace(/^\+/, ''),
+		series: i18n.t(`series.${item.series}`)
+	});
 }
