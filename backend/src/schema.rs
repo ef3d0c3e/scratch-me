@@ -1,11 +1,38 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    achievements (user_id, id) {
+        user_id -> Int8,
+        id -> Text,
+        earned_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     cosmetics (user_id, kind, item) {
         user_id -> Int8,
         kind -> Text,
         item -> Text,
         obtained_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    quest_days (user_id, day) {
+        user_id -> Int8,
+        day -> Date,
+        rerolled -> Bool,
+        bonus_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    quests (user_id, day, key) {
+        user_id -> Int8,
+        day -> Date,
+        key -> Text,
+        progress -> Int4,
+        done_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -18,6 +45,16 @@ diesel::table! {
         last_seen_at -> Timestamptz,
         expires_at -> Timestamptz,
         user_agent -> Text,
+    }
+}
+
+diesel::table! {
+    stats (user_id) {
+        user_id -> Int8,
+        scratched -> Int4,
+        wins -> Int4,
+        best_win -> Int8,
+        quests_done -> Int4,
     }
 }
 
@@ -56,12 +93,27 @@ diesel::table! {
         created_at -> Timestamptz,
         theme -> Text,
         tool -> Text,
+        xp -> Int8,
     }
 }
 
+diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(cosmetics -> users (user_id));
+diesel::joinable!(quest_days -> users (user_id));
+diesel::joinable!(quests -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
+diesel::joinable!(stats -> users (user_id));
 diesel::joinable!(streaks -> users (user_id));
 diesel::joinable!(tickets -> users (user_id));
 
-diesel::allow_tables_to_appear_in_same_query!(cosmetics, sessions, streaks, tickets, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    achievements,
+    cosmetics,
+    quest_days,
+    quests,
+    sessions,
+    stats,
+    streaks,
+    tickets,
+    users,
+);

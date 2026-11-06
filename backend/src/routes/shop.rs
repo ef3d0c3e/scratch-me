@@ -10,6 +10,7 @@ use crate::AppState;
 use crate::auth::CurrentUser;
 use crate::cosmetics::{Cosmetic, Theme, Tool};
 use crate::error::{ApiError, ApiResult};
+use crate::progress::{self, Event, Progress, levels};
 use crate::schema::{cosmetics, users};
 use crate::tickets::{Series, Source};
 
@@ -17,6 +18,8 @@ use crate::tickets::{Series, Source};
 pub struct TicketOffer {
     pub series: Series,
     pub price: i64,
+    /// The level it takes to buy it
+    pub level: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,7 +36,9 @@ pub struct ShopDto {
 
 #[get("/shop")]
 pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
-    let tickets = Series::ALL.into_iter().filter_map(|series| Some(TicketOffer { series, price: series.price()? }));
+    let tickets = Series::ALL
+        .into_iter()
+        .filter_map(|series| Some(TicketOffer { series, price: series.price()?, level: levels::shop_level(series) }));
     let cosmetics = Theme::ALL
         .into_iter()
         .map(Cosmetic::Theme)
@@ -54,6 +59,7 @@ pub struct Bought {
     pub coins: i64,
     pub ticket: Option<TicketDto>,
     pub item: Option<Cosmetic>,
+    pub progress: Progress,
 }
 
 #[post("/shop/buy")]
@@ -67,6 +73,12 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
     let mut conn = state.pool.get().await?;
     let out = conn
         .transaction(async move |conn| {
+            if let Buy::Ticket { series } = &buy {
+                let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
+                if levels::level_for(xp) < levels::shop_level(*series) {
+                    return Err(ApiError::Conflict("level_too_low"));
+                }
+            }
             // Pays only if the coins are there: two buys at once cannot both spend them
             let coins: Option<i64> = diesel::update(users::table.find(user.id).filter(users::coins.ge(price)))
                 .set(users::coins.eq(users::coins - price))
@@ -74,11 +86,12 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                 .get_result(conn)
                 .await
                 .optional()?;
-            let coins = coins.ok_or(ApiError::Conflict("not_enough_coins"))?;
+            coins.ok_or(ApiError::Conflict("not_enough_coins"))?;
             match buy {
                 Buy::Ticket { series } => {
                     let ticket = issue(conn, user.id, series, Source::Shop, 1).await?.pop();
-                    Ok(Bought { coins, ticket, item: None })
+                    let progress = progress::apply(conn, user.id, &[Event::Bought(series)]).await?;
+                    Ok(Bought { coins: progress.coins, ticket, item: None, progress })
                 }
                 Buy::Cosmetic { item } => {
                     let added = diesel::insert_into(cosmetics::table)
@@ -94,7 +107,9 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                     if added == 0 {
                         return Err(ApiError::Conflict("already_owned"));
                     }
-                    Ok(Bought { coins, ticket: None, item: Some(item) })
+                    // Owning more may earn the collector achievement
+                    let progress = progress::apply(conn, user.id, &[]).await?;
+                    Ok(Bought { coins: progress.coins, ticket: None, item: Some(item), progress })
                 }
             }
         })

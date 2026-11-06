@@ -11,11 +11,12 @@ use crate::auth::CurrentUser;
 use crate::cosmetics::DUPLICATE_COINS;
 use crate::error::{ApiError, ApiResult};
 use crate::pocket;
+use crate::progress::{self, Event, Progress, Scratch};
 use crate::schema::{cosmetics, tickets, users};
 use crate::tickets::{Prize, Series, Source};
 
 /// An unscratched ticket, as the player sees it: no layout, no prize
-#[derive(Debug, Serialize, Queryable)]
+#[derive(Debug, Clone, Serialize, Queryable)]
 pub struct TicketDto {
     pub id: i64,
     pub series: String,
@@ -73,15 +74,18 @@ pub(crate) async fn issue_each(
 
 /// What a prize did to the player's account
 pub(crate) struct Granted {
-    /// The balance after it
-    pub coins: i64,
     pub tickets: Vec<TicketDto>,
     /// A cosmetic already owned, paid in coins instead
     pub duplicate: bool,
 }
 
 /// Gives the player a prize, inside the caller's transaction
-pub(crate) async fn grant(conn: &mut AsyncPgConnection, user_id: i64, prize: &Prize) -> ApiResult<Granted> {
+pub(crate) async fn grant(
+    conn: &mut AsyncPgConnection,
+    user_id: i64,
+    prize: &Prize,
+    source: Source,
+) -> ApiResult<Granted> {
     let add = async |conn: &mut AsyncPgConnection, amount: i64| -> ApiResult<i64> {
         Ok(diesel::update(users::table.find(user_id))
             .set(users::coins.eq(users::coins + amount))
@@ -91,15 +95,15 @@ pub(crate) async fn grant(conn: &mut AsyncPgConnection, user_id: i64, prize: &Pr
     };
     let mut tickets = Vec::new();
     let mut duplicate = false;
-    let coins = match prize {
+    match prize {
         Prize::Nothing => add(conn, 0).await?,
         Prize::Coins { amount } => add(conn, *amount).await?,
         Prize::Ticket { series } => {
-            tickets = issue(conn, user_id, *series, Source::Prize, 1).await?;
+            tickets = issue(conn, user_id, *series, source, 1).await?;
             add(conn, 0).await?
         }
         Prize::Tickets { series } => {
-            tickets = issue_each(conn, user_id, series, Source::Prize).await?;
+            tickets = issue_each(conn, user_id, series, source).await?;
             add(conn, 0).await?
         }
         Prize::PocketRefill => {
@@ -125,7 +129,7 @@ pub(crate) async fn grant(conn: &mut AsyncPgConnection, user_id: i64, prize: &Pr
             add(conn, if added { 0 } else { DUPLICATE_COINS }).await?
         }
     };
-    Ok(Granted { coins, tickets, duplicate })
+    Ok(Granted { tickets, duplicate })
 }
 
 #[derive(Debug, Serialize)]
@@ -140,6 +144,7 @@ pub struct Scratched {
     pub tickets: Vec<TicketDto>,
     /// The cosmetic won was already owned: coins instead
     pub duplicate: bool,
+    pub progress: Progress,
 }
 
 /// Uncovers a ticket: its layout, and the prize credited, once
@@ -178,15 +183,20 @@ pub async fn scratch(
                 });
             };
             let prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
-            let g = grant(conn, user.id, &prize).await?;
+            let g = grant(conn, user.id, &prize, Source::Prize).await?;
+            let kind = Series::parse(&series).ok_or_else(|| ApiError::Internal(anyhow::anyhow!("series {series}")))?;
+            let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
+            let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra));
+            let progress = progress::apply(conn, user.id, &[event]).await?;
             Ok::<_, ApiError>(Scratched {
                 id,
                 series,
                 layout,
                 prize,
-                coins: g.coins,
+                coins: progress.coins,
                 tickets: g.tickets,
                 duplicate: g.duplicate,
+                progress,
             })
         })
         .await?;

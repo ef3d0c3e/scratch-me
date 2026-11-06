@@ -48,7 +48,38 @@ async fn body(res: ServiceResponse) -> Value {
     serde_json::from_slice(&test::read_body(res).await).unwrap_or(Value::Null)
 }
 
+/// A player whose quests and achievements stay out of the way: no quest
+/// today (a placeholder row stands for them), every achievement earned. For
+/// tests that count coins.
+async fn quiet(name: &str) {
+    diesel::sql_query(
+        "INSERT INTO quests (user_id, day, key)
+         SELECT id, (now() AT TIME ZONE tz)::date, 'none' FROM users WHERE username = $1",
+    )
+    .bind::<diesel::sql_types::Text, _>(name)
+    .execute(&mut conn().await)
+    .await
+    .unwrap();
+    for a in scratchme_api::progress::achievements::all() {
+        diesel::sql_query("INSERT INTO achievements (user_id, id) SELECT id, $2 FROM users WHERE username = $1")
+            .bind::<diesel::sql_types::Text, _>(name)
+            .bind::<diesel::sql_types::Text, _>(a.id)
+            .execute(&mut conn().await)
+            .await
+            .unwrap();
+    }
+}
+
 async fn register<S>(app: &S, name: &str, tz: &str) -> Cookie<'static>
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let cookie = register_fresh(app, name, tz).await;
+    quiet(name).await;
+    cookie
+}
+
+async fn register_fresh<S>(app: &S, name: &str, tz: &str) -> Cookie<'static>
 where
     S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
 {
@@ -269,6 +300,10 @@ async fn shop_sells_tickets_for_coins() {
     let app = app!(state);
     let name = unique("shop");
     let me = register(&app, &name, "UTC").await;
+    let (status, body) =
+        post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "cash_wheel" })).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")), "the wheel takes level 5");
+    set_xp(&name, 1000).await;
     let (status, shop) = get(&app, "/api/shop", &me).await;
     assert_eq!(status, 200);
     let wheel = shop["tickets"].as_array().unwrap().iter().find(|t| t["series"] == "cash_wheel").unwrap();
@@ -296,6 +331,7 @@ async fn buying_at_once_never_overspends() {
     let name = unique("race");
     let me = register(&app, &name, "UTC").await;
     set_coins(&name, 160).await;
+    set_xp(&name, 300).await;
     let buy = || post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "number_match" }));
     let (a, b) = tokio::join!(buy(), buy());
     let mut statuses = [a.0, b.0];
@@ -384,4 +420,124 @@ async fn chain_prize_issues_every_ticket_found() {
     assert_eq!(won, ["number_match", "golden"]);
     let (_, me_body) = get(&app, "/api/me", &me).await;
     assert_eq!(me_body["tickets"].as_array().unwrap().len(), 2);
+}
+
+async fn set_xp(name: &str, xp: i64) {
+    use schema::users;
+    diesel::update(users::table.filter(users::username.eq(name)))
+        .set(users::xp.eq(xp))
+        .execute(&mut conn().await)
+        .await
+        .unwrap();
+}
+
+/// Sets today's quests to these, with this much progress
+async fn set_quests(name: &str, quests: &[(&str, i32)]) {
+    let c = &mut conn().await;
+    diesel::sql_query("DELETE FROM quests WHERE user_id = (SELECT id FROM users WHERE username = $1)")
+        .bind::<diesel::sql_types::Text, _>(name)
+        .execute(c)
+        .await
+        .unwrap();
+    for (key, progress) in quests {
+        diesel::sql_query(
+            "INSERT INTO quests (user_id, day, key, progress)
+             SELECT id, (now() AT TIME ZONE tz)::date, $2, $3 FROM users WHERE username = $1",
+        )
+        .bind::<diesel::sql_types::Text, _>(name)
+        .bind::<diesel::sql_types::Text, _>(*key)
+        .bind::<diesel::sql_types::Integer, _>(*progress)
+        .execute(c)
+        .await
+        .unwrap();
+    }
+}
+
+#[actix_web::test]
+async fn scratching_gives_xp_achievements_and_levels() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("xp");
+    let me = register_fresh(&app, &name, "UTC").await;
+    set_quests(&name, &[]).await;
+    set_xp(&name, 95).await;
+    let prize = json!({ "kind": "coins", "amount": 50 });
+    let id = known_ticket(&name, "lucky_three", json!({ "cells": vec!["clover"; 9], "win": "clover" }), prize).await;
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(status, 200);
+    let p = &body["progress"];
+    // 10 for scratching, 5 for winning, 50/20 = 2 for the coins
+    assert_eq!(p["xp_gained"], 17);
+    assert_eq!(p["level"]["level"], 2, "95 + 17 passes 100");
+    assert_eq!(p["level_ups"], json!([{ "what": "2", "reward": { "kind": "ticket", "series": "number_match" } }]));
+    let got: Vec<&str> = p["achievements"].as_array().unwrap().iter().map(|a| a["what"].as_str().unwrap()).collect();
+    assert_eq!(got, ["first_scratch", "first_win"]);
+    // 50 won, 50 + 50 for the two achievements
+    assert_eq!(body["coins"], STARTING_COINS + 150);
+    assert_eq!(p["tickets"][0]["series"], "number_match");
+    assert_eq!(p["tickets"][0]["source"], "reward");
+
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["level"], json!({ "level": 2, "xp": 112, "from": 100, "to": 300 }));
+    let (_, list) = get(&app, "/api/achievements", &me).await;
+    let first = list.as_array().unwrap().iter().find(|a| a["id"] == "scratch_100").unwrap();
+    assert_eq!(first["progress"], json!([1, 100]));
+    assert!(first["earned_at"].is_null());
+}
+
+#[actix_web::test]
+async fn quests_pay_once_and_the_bonus_once() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("quest");
+    let me = register(&app, &name, "UTC").await;
+    set_quests(&name, &[("scratch_5", 4), ("pocket", 1), ("win_3", 2)]).await;
+    // pocket done already: mark it
+    diesel::sql_query("UPDATE quests SET done_at = now() WHERE key = 'pocket' AND user_id = (SELECT id FROM users WHERE username = $1)")
+        .bind::<diesel::sql_types::Text, _>(&name)
+        .execute(&mut conn().await)
+        .await
+        .unwrap();
+    let (_, q) = get(&app, "/api/quests", &me).await;
+    assert_eq!(q["items"].as_array().unwrap().len(), 3);
+    assert_eq!(q["bonus_done"], false);
+
+    let prize = json!({ "kind": "coins", "amount": 50 });
+    let id =
+        known_ticket(&name, "lucky_three", json!({ "cells": vec!["clover"; 9], "win": "clover" }), prize.clone()).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    let p = &body["progress"];
+    let done: Vec<&str> = p["quests"].as_array().unwrap().iter().map(|q| q["what"].as_str().unwrap()).collect();
+    assert_eq!(done, ["scratch_5", "win_3"]);
+    assert_eq!(p["bonus"], json!({ "kind": "ticket", "series": "ticket_chain" }));
+    // 50 won, 100 for scratch_5; win_3 gives a Lucky Three, the bonus a chain
+    assert_eq!(body["coins"], STARTING_COINS + 150);
+    let series: Vec<&str> = p["tickets"].as_array().unwrap().iter().map(|t| t["series"].as_str().unwrap()).collect();
+    // The quests' and bonus' xp (25 + 25 + 50) and the scratch's reach level 2: a Number Match
+    assert_eq!(series, ["lucky_three", "ticket_chain", "number_match"]);
+
+    // Done is done: another scratch pays neither again
+    let id = known_ticket(&name, "lucky_three", json!({ "cells": vec!["clover"; 9], "win": "clover" }), prize).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(body["progress"]["quests"], json!([]));
+    assert_eq!(body["progress"]["bonus"], Value::Null);
+    let (_, q) = get(&app, "/api/quests", &me).await;
+    assert_eq!(q["bonus_done"], true);
+}
+
+#[actix_web::test]
+async fn one_reroll_a_day() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("reroll");
+    let me = register(&app, &name, "UTC").await;
+    set_quests(&name, &[("scratch_5", 0), ("pocket", 0), ("win_3", 0)]).await;
+    let (status, q) = post_json(&app, "/api/quests/reroll", &me, json!({ "key": "pocket" })).await;
+    assert_eq!(status, 200);
+    let keys: Vec<&str> = q["items"].as_array().unwrap().iter().map(|i| i["key"].as_str().unwrap()).collect();
+    assert_eq!(keys.len(), 3);
+    assert!(!keys.contains(&"pocket"));
+    assert_eq!(q["rerolled"], true);
+    let (status, body) = post_json(&app, "/api/quests/reroll", &me, json!({ "key": "win_3" })).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("already_rerolled")));
 }

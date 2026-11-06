@@ -5,6 +5,7 @@ pub mod db;
 pub mod envelope;
 pub mod error;
 pub mod pocket;
+pub mod progress;
 pub mod ratelimit;
 pub mod routes;
 pub mod schema;

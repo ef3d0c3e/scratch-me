@@ -104,6 +104,8 @@ pub enum Source {
     Envelope,
     Prize,
     Shop,
+    /// Levels, quests and achievements
+    Reward,
 }
 
 impl Source {
@@ -113,6 +115,7 @@ impl Source {
             Source::Envelope => "envelope",
             Source::Prize => "prize",
             Source::Shop => "shop",
+            Source::Reward => "reward",
         }
     }
 }

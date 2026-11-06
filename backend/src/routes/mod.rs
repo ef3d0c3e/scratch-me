@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, get, web};
 use crate::auth;
 
 pub mod player;
+pub mod progression;
 pub mod shop;
 pub mod tickets;
 
@@ -29,6 +30,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(tickets::scratch)
             .service(shop::list)
             .service(shop::buy)
-            .service(shop::equip),
+            .service(shop::equip)
+            .service(progression::get_quests)
+            .service(progression::reroll)
+            .service(progression::get_achievements),
     );
 }

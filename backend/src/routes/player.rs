@@ -13,6 +13,7 @@ use crate::cosmetics::Cosmetic;
 use crate::envelope::{self, Contents};
 use crate::error::{ApiError, ApiResult};
 use crate::pocket::{self, Pocket};
+use crate::progress::{self, Event, Progress, levels};
 use crate::schema::{cosmetics, streaks, tickets, users};
 use crate::tickets::{Series, Source};
 
@@ -41,6 +42,7 @@ pub struct MeDto {
     pub tool: String,
     /// Cosmetics owned besides the defaults
     pub owned: Vec<Cosmetic>,
+    pub level: levels::LevelDto,
     /// Unscratched tickets, oldest first
     pub tickets: Vec<TicketDto>,
 }
@@ -48,9 +50,9 @@ pub struct MeDto {
 #[get("/me")]
 pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<MeDto>> {
     let mut conn = state.pool.get().await?;
-    let (coins, tz, stored, at, theme, tool): (i64, String, i32, DateTime<Utc>, String, String) = users::table
+    let (coins, tz, stored, at, theme, tool, xp): (i64, String, i32, DateTime<Utc>, String, String, i64) = users::table
         .find(user.id)
-        .select((users::coins, users::tz, users::pocket_count, users::pocket_at, users::theme, users::tool))
+        .select((users::coins, users::tz, users::pocket_count, users::pocket_at, users::theme, users::tool, users::xp))
         .first(&mut conn)
         .await?;
     let owned: Vec<(String, String)> = cosmetics::table
@@ -95,6 +97,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         theme,
         tool,
         owned,
+        level: levels::dto(xp),
         tickets: held,
     }))
 }
@@ -103,6 +106,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
 pub struct PocketClaim {
     pub tickets: Vec<TicketDto>,
     pub pocket: Pocket,
+    pub progress: Progress,
 }
 
 /// Moves every ticket in the pocket to the player's stack
@@ -128,7 +132,8 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
                 .execute(conn)
                 .await?;
             let tickets = issue(conn, user.id, Series::LuckyThree, Source::Pocket, n).await?;
-            Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now) })
+            let progress = progress::apply(conn, user.id, &[Event::PocketTaken(n)]).await?;
+            Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now), progress })
         })
         .await?;
     Ok(web::Json(out))
@@ -140,6 +145,7 @@ pub struct EnvelopeClaim {
     pub contents: Contents,
     pub coins: i64,
     pub tickets: Vec<TicketDto>,
+    pub progress: Progress,
 }
 
 /// Opens today's envelope
@@ -172,13 +178,13 @@ pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> Ap
                 .execute(conn)
                 .await?;
             let contents = envelope::contents(day);
-            let coins = diesel::update(users::table.find(user.id))
+            diesel::update(users::table.find(user.id))
                 .set(users::coins.eq(users::coins + contents.coins))
-                .returning(users::coins)
-                .get_result(conn)
+                .execute(conn)
                 .await?;
             let tickets = issue_each(conn, user.id, &contents.tickets, Source::Envelope).await?;
-            Ok::<_, ApiError>(EnvelopeClaim { day, contents, coins, tickets })
+            let progress = progress::apply(conn, user.id, &[Event::EnvelopeOpened { streak: day }]).await?;
+            Ok::<_, ApiError>(EnvelopeClaim { day, contents, coins: progress.coins, tickets, progress })
         })
         .await?;
     Ok(web::Json(out))
