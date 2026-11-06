@@ -1,0 +1,67 @@
+# Production, next to AnyCardz behind the host's nginx (see docs/deploy.md):
+#   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
+# Nothing is published beyond the host's loopback: nginx serves the site on
+# 80/443 and proxies to API_PORT and WEB_PORT. Its own project, network,
+# database and ports, so it never touches AnyCardz's (8080, 3000, 9100).
+name: scratchme
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scratchme
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: scratchme
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scratchme"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scratchme:${POSTGRES_PASSWORD}@db:5432/scratchme
+      SCRATCHME_SECURE_COOKIES: ${SECURE_COOKIES:-1}
+      # nginx reaches the containers through the network's gateway: only its
+      # X-Forwarded-For is believed (login and sign-up limits are per address)
+      SCRATCHME_TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.31.0.1}
+      RUST_LOG: ${RUST_LOG:-info}
+      # Prometheus scrapes this listener; nginx never serves it
+      SCRATCHME_METRICS_BIND: 0.0.0.0:9101
+      SCRATCHME_METRICS_TOKEN: ${METRICS_TOKEN:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:8080"
+      - "${METRICS_PUBLISH:-127.0.0.1:9101}:9101"
+    networks: [internal]
+
+  web:
+    build: frontend
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      ORIGIN: ${ORIGIN:-https://${DOMAIN:?set DOMAIN in .env.prod}}
+      API_URL: http://api:8080
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3001}:3000"
+    networks: [internal]
+
+networks:
+  internal:
+    ipam:
+      config:
+        # AnyCardz has 172.30.0.0/24; change both lines if this one is taken on the server
+        - subnet: ${SUBNET:-172.31.0.0/24}
+
+volumes:
+  db-data:

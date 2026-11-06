@@ -29,6 +29,8 @@ The ports differ from AnyCardz's, so both can run side by side. The API runs its
 | `make check`    | clippy, rustfmt, svelte-check, prettier                              |
 | `make fmt`      | Format Rust and frontend code                                        |
 
+Deploying next to AnyCardz: see [docs/deploy.md](docs/deploy.md).
+
 Announcements are posted by admins, from the Chat page. To make a player an admin:
 
 ```sh

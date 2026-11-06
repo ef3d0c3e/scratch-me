@@ -4,6 +4,7 @@ node_modules/
 /frontend/build/
 /frontend/test-results/
 .env
+.env.prod
 # Local tooling configuration (holds the Lific API key)
 .mcp.json
 .claude/settings.local.json

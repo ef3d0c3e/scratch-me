@@ -1,0 +1,10 @@
+target
+node_modules
+.svelte-kit
+build
+test-results
+.env
+.env.*
+.git
+.mcp.json
+.claude
