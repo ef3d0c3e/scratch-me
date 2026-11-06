@@ -3,10 +3,10 @@
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { api, post } from '#lib/api.ts';
 	import { getSession } from '#lib/session.svelte.ts';
-	import { prizeText } from '#lib/prize.ts';
+	import { prizeText, questName } from '#lib/prize.ts';
 	import type { QuestsDto } from '#lib/types.ts';
 
-	/** Today's three quests, the bonus for all three, and the one reroll */
+	/** The round's three quests, the bonus for all three, and the day's one reroll */
 	const i18n = getI18n();
 	const session = getSession();
 	let quests = $state<QuestsDto | null>(null);
@@ -37,7 +37,9 @@
 			busy = false;
 		}
 	}
-	const name = (key: string) => (i18n.has(`quest.${key}`) ? i18n.t(`quest.${key}` as never) : key);
+	const name = (key: string, goal: number) => questName(i18n, key, goal);
+	/** The last round done: nothing more today */
+	const over = $derived(!!quests && quests.bonus_done && quests.round >= quests.rounds);
 	const done = $derived(quests?.items.filter((q) => q.done).length ?? 0);
 </script>
 
@@ -47,11 +49,25 @@
 		{#if quests}<span class="count">{done}/{quests.items.length}</span>{/if}
 	</div>
 	{#if quests}
+		<p class="round" data-round={quests.round}>
+			{i18n.t('quests.round', { n: quests.round, of: quests.rounds })}
+			<span class="pips" aria-hidden="true">
+				{#each { length: quests.rounds }, i (i)}
+					<span
+						class="pip"
+						class:past={i + 1 < quests.round || over}
+						class:now={i + 1 === quests.round && !over}
+					></span>
+				{/each}
+			</span>
+		</p>
+	{/if}
+	{#if quests}
 		<ul>
-			{#each quests.items as q (q.key)}
+			{#each quests.items as q (`${quests.round}:${q.key}`)}
 				<li class:done={q.done} data-quest={q.key}>
 					<div class="row">
-						<span class="name">{q.done ? '✅ ' : ''}{name(q.key)}</span>
+						<span class="name">{q.done ? '✅ ' : ''}{name(q.key, q.goal)}</span>
 						<span class="reward">{prizeText(i18n, q.reward)}</span>
 					</div>
 					<div class="bar" aria-hidden="true">
@@ -65,7 +81,7 @@
 								class="reroll"
 								disabled={busy}
 								onclick={() => reroll(q.key)}
-								aria-label="{i18n.t('quests.reroll')}: {name(q.key)}"
+								aria-label="{i18n.t('quests.reroll')}: {name(q.key, q.goal)}"
 								>🎲 {i18n.t('quests.reroll')}</button
 							>
 						{/if}
@@ -76,6 +92,11 @@
 		<p class="bonus" class:got={quests.bonus_done}>
 			🎁 {quests.bonus_done ? i18n.t('quests.bonus_done') : i18n.t('quests.bonus')}
 			<b>{prizeText(i18n, quests.bonus)}</b>
+			{#if over}
+				<span class="then">{i18n.t('quests.all_done')}</span>
+			{:else if quests.round < quests.rounds}
+				<span class="then">{i18n.t('quests.next')}</span>
+			{/if}
 		</p>
 	{/if}
 	{#if error}<p class="err" role="alert">{error}</p>{/if}
@@ -163,6 +184,37 @@
 	}
 	.bonus b {
 		color: var(--gold);
+	}
+	.then {
+		display: block;
+		margin-top: 2px;
+		font-size: 12px;
+	}
+	.round {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: 12px;
+		color: var(--muted);
+		margin: -4px 0 10px;
+	}
+	.pips {
+		display: flex;
+		gap: 4px;
+	}
+	.pip {
+		width: 18px;
+		height: 6px;
+		border-radius: 99px;
+		background: var(--night);
+		border: 1px solid var(--line);
+	}
+	.pip.past {
+		background: var(--mint);
+		border-color: var(--mint);
+	}
+	.pip.now {
+		border-color: var(--mint);
 	}
 	.bonus.got {
 		color: var(--mint);

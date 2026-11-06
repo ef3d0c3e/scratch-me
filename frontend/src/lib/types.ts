@@ -149,6 +149,8 @@ export interface Reward {
 	/** A level reached, a quest key or an achievement id */
 	what: string;
 	reward: Prize;
+	/** A quest's goal, which grows with the round */
+	goal?: number;
 }
 
 /** What an action's progress gave */
@@ -158,6 +160,8 @@ export interface Progress {
 	level_ups: Reward[];
 	quests: Reward[];
 	bonus: Prize | null;
+	/** The next round of quests the bonus opened */
+	next_round: number | null;
 	achievements: Reward[];
 	tickets: TicketDto[];
 	coins: number;
@@ -172,7 +176,10 @@ export interface QuestDto {
 }
 
 export interface QuestsDto {
+	/** The round on now: its three quests */
 	items: QuestDto[];
+	round: number;
+	rounds: number;
 	bonus: Prize;
 	bonus_done: boolean;
 	rerolled: boolean;

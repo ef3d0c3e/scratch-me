@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { GRIDS, giveTicket, newPlayer, setQuests, setXp, visit } from './helpers';
+import { GRIDS, giveTicket, newPlayer, setQuests, setXp, sql, visit } from './helpers';
 
 test('a first win earns achievements and a level, announced', async ({ page }) => {
 	const name = await newPlayer(page, { fresh: true });
@@ -59,4 +59,36 @@ test('quests move as you play, pay once, and one can be swapped', async ({ page 
 	await expect(quests.locator('li')).toHaveCount(3);
 	// One swap a day
 	await expect(quests.getByRole('button', { name: /Swap/ })).toHaveCount(0);
+});
+
+test('finishing the three opens three harder ones, round by round', async ({ page }) => {
+	const name = await newPlayer(page);
+	await setQuests(name, [
+		['pocket', 0],
+		['scratch_5', 5],
+		['win_3', 3]
+	]);
+	await sql(
+		`UPDATE quests SET done_at = now()
+		 WHERE key <> 'pocket' AND user_id = (SELECT id FROM users WHERE username = $1)`,
+		[name]
+	);
+	await visit(page, '/');
+	const quests = page.getByRole('region', { name: 'Daily quests' });
+	await expect(quests).toContainText('Round 1 of 4');
+	await expect(quests).toContainText('Then three harder quests');
+
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
+	const toast = page.locator('.news .toast');
+	await expect(toast).toContainText('Take your pocket');
+	await toast.click();
+	await expect(toast).toContainText('Three harder quests are up');
+	await expect(quests).toContainText('Round 2 of 4');
+	await expect(quests).toContainText('0/3');
+	// Half as much again: the envelope does not come back
+	await expect(quests.locator('li[data-quest="envelope"]')).toHaveCount(0);
+	const goals: number[] = (await (await page.request.get('/api/quests')).json()).items.map(
+		(q: { goal: number }) => q.goal
+	);
+	expect(goals.every((g) => g >= 2)).toBe(true);
 });

@@ -456,10 +456,11 @@ mod tests {
         let p = Progress {
             xp_gained: 10,
             level: levels::dto(0),
-            level_ups: vec![Reward { what: "2".into(), reward: coins(0) }],
-            quests: vec![Reward { what: "scratch_5".into(), reward: coins(100) }],
+            level_ups: vec![Reward { what: "2".into(), reward: coins(0), goal: None }],
+            quests: vec![Reward { what: "scratch_5".into(), reward: coins(100), goal: None }],
             bonus: Some(coins(25)),
-            achievements: vec![Reward { what: "first_win".into(), reward: coins(50) }],
+            next_round: None,
+            achievements: vec![Reward { what: "first_win".into(), reward: coins(50), goal: None }],
             tickets: vec![],
             coins: 0,
         };

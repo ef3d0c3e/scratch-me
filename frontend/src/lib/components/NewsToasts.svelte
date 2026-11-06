@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getSession, type News } from '#lib/session.svelte.ts';
-	import { prizeText } from '#lib/prize.ts';
+	import { prizeText, questName } from '#lib/prize.ts';
 
 	/**
 	 * Level ups, quests done and achievements, as they happen: one at a time
@@ -38,8 +38,8 @@
 	}
 
 	function what(n: News) {
-		if (n.kind === 'quest')
-			return i18n.has(`quest.${n.what}`) ? i18n.t(`quest.${n.what}` as never) : n.what;
+		if (n.kind === 'quest') return questName(i18n, n.what, n.n ?? 1);
+		if (n.kind === 'bonus' && n.what === 'more') return i18n.t('news.more_quests');
 		if (n.kind === 'achievement')
 			return i18n.has(`achievement.${n.what}`) ? i18n.t(`achievement.${n.what}` as never) : n.what;
 		return '';

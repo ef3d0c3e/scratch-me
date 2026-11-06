@@ -25,9 +25,13 @@ pub struct QuestDto {
 
 #[derive(Debug, Serialize)]
 pub struct QuestsDto {
+    /// The round on now: its three quests
     pub items: Vec<QuestDto>,
+    /// 1 to `rounds`: finishing one opens the next, harder
+    pub round: i32,
+    pub rounds: i32,
     pub bonus: Prize,
-    /// All three done and the bonus paid
+    /// This round's three done and its bonus paid (the last round: the day is done)
     pub bonus_done: bool,
     /// The day's one reroll is spent
     pub rerolled: bool,
@@ -36,10 +40,11 @@ pub struct QuestsDto {
 
 async fn quests_dto(conn: &mut diesel_async::AsyncPgConnection, uid: i64) -> ApiResult<QuestsDto> {
     let day = progress::quest_day(conn, uid).await?;
-    progress::ensure_quests(conn, uid, day).await?;
+    let round = progress::ensure_quests(conn, uid, day).await?;
     let found: Vec<(String, i32, Option<DateTime<Utc>>)> = rows::table
         .filter(rows::user_id.eq(uid))
         .filter(rows::day.eq(day))
+        .filter(rows::round.eq(round))
         .order(rows::key)
         .select((rows::key, rows::progress, rows::done_at))
         .load(conn)
@@ -48,21 +53,23 @@ async fn quests_dto(conn: &mut diesel_async::AsyncPgConnection, uid: i64) -> Api
         .into_iter()
         .filter_map(|(key, progress, done)| {
             let q = quests::quest(&key)?;
-            Some(QuestDto { key, goal: q.goal, progress, done: done.is_some(), reward: q.reward })
+            Some(QuestDto { key, goal: q.goal_in(round), progress, done: done.is_some(), reward: q.reward_in(round) })
         })
         .collect();
-    let flags: Option<(bool, Option<DateTime<Utc>>)> = quest_days::table
+    let flags: Option<(bool, i32)> = quest_days::table
         .find((uid, day))
-        .select((quest_days::rerolled, quest_days::bonus_at))
+        .select((quest_days::rerolled, quest_days::bonuses))
         .first(conn)
         .await
         .optional()?;
-    let (rerolled, bonus_at) = flags.unwrap_or((false, None));
+    let (rerolled, bonuses) = flags.unwrap_or((false, 0));
     let tz: String = users::table.find(uid).select(users::tz).first(conn).await?;
     Ok(QuestsDto {
         items,
+        round,
+        rounds: quests::ROUNDS,
         bonus: quests::BONUS,
-        bonus_done: bonus_at.is_some(),
+        bonus_done: bonuses >= round,
         rerolled,
         resets_at: envelope::next_day_at(parse_tz(Some(&tz)), Utc::now()),
     })
@@ -92,7 +99,7 @@ pub async fn reroll(
         .transaction(async move |conn| {
             let xp: i64 = users::table.find(user.id).select(users::xp).for_update().first(conn).await?;
             let day = progress::quest_day(conn, user.id).await?;
-            progress::ensure_quests(conn, user.id, day).await?;
+            let round = progress::ensure_quests(conn, user.id, day).await?;
             let rerolled: bool = quest_days::table
                 .find((user.id, day))
                 .select(quest_days::rerolled)
@@ -104,7 +111,7 @@ pub async fn reroll(
                 return Err(ApiError::Conflict("already_rerolled"));
             }
             let done: Option<Option<DateTime<Utc>>> =
-                rows::table.find((user.id, day, &key)).select(rows::done_at).first(conn).await.optional()?;
+                rows::table.find((user.id, day, round, &key)).select(rows::done_at).first(conn).await.optional()?;
             match done {
                 None => return Err(ApiError::NotFound("quest")),
                 Some(Some(_)) => return Err(ApiError::Conflict("quest_done")),
@@ -113,14 +120,15 @@ pub async fn reroll(
             let have: Vec<String> = rows::table
                 .filter(rows::user_id.eq(user.id))
                 .filter(rows::day.eq(day))
+                .filter(rows::round.eq(round))
                 .select(rows::key)
                 .load(conn)
                 .await?;
-            let new = quests::reroll(user.id, day, levels::level_for(xp), user.is_guest, &have)
+            let new = quests::reroll(user.id, day, round, levels::level_for(xp), user.is_guest, &have)
                 .ok_or(ApiError::Conflict("no_other_quest"))?;
-            diesel::delete(rows::table.find((user.id, day, &key))).execute(conn).await?;
+            diesel::delete(rows::table.find((user.id, day, round, &key))).execute(conn).await?;
             diesel::insert_into(rows::table)
-                .values((rows::user_id.eq(user.id), rows::day.eq(day), rows::key.eq(new)))
+                .values((rows::user_id.eq(user.id), rows::day.eq(day), rows::round.eq(round), rows::key.eq(new)))
                 .execute(conn)
                 .await?;
             diesel::insert_into(quest_days::table)

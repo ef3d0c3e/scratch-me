@@ -90,16 +90,18 @@ diesel::table! {
         day -> Date,
         rerolled -> Bool,
         bonus_at -> Nullable<Timestamptz>,
+        bonuses -> Int4,
     }
 }
 
 diesel::table! {
-    quests (user_id, day, key) {
+    quests (user_id, day, round, key) {
         user_id -> Int8,
         day -> Date,
         key -> Text,
         progress -> Int4,
         done_at -> Nullable<Timestamptz>,
+        round -> Int4,
     }
 }
 

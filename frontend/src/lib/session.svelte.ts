@@ -14,6 +14,8 @@ export interface News {
 	kind: 'level' | 'quest' | 'bonus' | 'achievement' | 'gift' | 'duel' | 'pot' | 'welcome';
 	what: string;
 	reward: Prize;
+	/** A quest's goal */
+	n?: number;
 }
 
 export class Session {
@@ -50,11 +52,11 @@ export class Session {
 		this.me.coins = p.coins;
 		this.me.level = p.level;
 		this.add(p.tickets);
-		const push = (kind: News['kind'], what: string, reward: Prize) =>
-			this.news.push({ id: ++this.newsId, kind, what, reward });
+		const push = (kind: News['kind'], what: string, reward: Prize, n?: number) =>
+			this.news.push({ id: ++this.newsId, kind, what, reward, n });
 		for (const l of p.level_ups) push('level', l.what, l.reward);
-		for (const q of p.quests) push('quest', q.what, q.reward);
-		if (p.bonus) push('bonus', '', p.bonus);
+		for (const q of p.quests) push('quest', q.what, q.reward, q.goal);
+		if (p.bonus) push('bonus', p.next_round ? 'more' : '', p.bonus);
 		for (const a of p.achievements) push('achievement', a.what, a.reward);
 		this.progressed++;
 	}

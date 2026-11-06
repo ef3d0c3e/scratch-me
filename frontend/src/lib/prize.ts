@@ -53,3 +53,9 @@ export function feedText(i18n: I18n, item: FeedItem): string {
 		series: i18n.t(`series.${item.series}`)
 	});
 }
+
+/** A quest's name with its goal ("Scratch 8 tickets"); the key itself when unknown */
+export function questName(i18n: I18n, key: string, goal: number) {
+	const k = `quest.${key}`;
+	return i18n.has(k) || i18n.has(`${k}_other`) ? i18n.t(k as never, { n: goal }) : key;
+}

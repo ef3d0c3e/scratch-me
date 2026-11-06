@@ -45,7 +45,7 @@ cargo run -p scratchme-api -- make-admin <username>
 - Five ticket series (Lucky Three, Number Match, Ticket Chain, Cash Wheel, Golden Ticket), a shop, themes and scratch tools
 - Charms: discount, luck (a losing ticket may be drawn again) and payout, in bronze, silver and gold; each lasts a number of uses or a time window, one of each kind at a time, and never makes play profitable
 - Celebrations scaled to the prize, scratch sound and haptics, tilt shimmer
-- Levels, daily quests, achievements
+- Levels, achievements, and daily quests in up to four rounds: finishing three opens three harder ones
 - Shoutbox and live feed of big wins over a WebSocket, announcements, profiles and titles
 
 ## Metrics

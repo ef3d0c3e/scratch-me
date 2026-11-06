@@ -31,6 +31,9 @@ pub struct Reward {
     /// A level reached, a quest key or an achievement id
     pub what: String,
     pub reward: Prize,
+    /// A quest's goal, which grows with the round
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub goal: Option<i32>,
 }
 
 /// What an action's progress gave
@@ -40,8 +43,10 @@ pub struct Progress {
     pub level: LevelDto,
     pub level_ups: Vec<Reward>,
     pub quests: Vec<Reward>,
-    /// The day's quests all done: this bonus
+    /// A round of quests all done: this bonus
     pub bonus: Option<Prize>,
+    /// ...and the next round it opened
+    pub next_round: Option<i32>,
     pub achievements: Vec<Reward>,
     /// Tickets the rewards gave
     pub tickets: Vec<TicketDto>,
@@ -55,21 +60,29 @@ pub async fn quest_day(conn: &mut AsyncPgConnection, uid: i64) -> ApiResult<Naiv
     Ok(envelope::today(parse_tz(Some(&tz)), Utc::now()))
 }
 
-/// Stores the day's quests when they are not yet
-pub async fn ensure_quests(conn: &mut AsyncPgConnection, uid: i64, day: NaiveDate) -> ApiResult<()> {
-    let have: i64 = quest_rows::table
+/// Stores the day's first round of quests when it is not yet. Answers the round the player is on.
+pub async fn ensure_quests(conn: &mut AsyncPgConnection, uid: i64, day: NaiveDate) -> ApiResult<i32> {
+    let round: Option<i32> = quest_rows::table
         .filter(quest_rows::user_id.eq(uid))
         .filter(quest_rows::day.eq(day))
-        .count()
-        .get_result(conn)
+        .select(diesel::dsl::max(quest_rows::round))
+        .first(conn)
         .await?;
-    if have > 0 {
-        return Ok(());
+    if let Some(round) = round {
+        return Ok(round);
     }
+    open_round(conn, uid, day, 1).await?;
+    Ok(1)
+}
+
+/// Draws and stores a round of quests
+async fn open_round(conn: &mut AsyncPgConnection, uid: i64, day: NaiveDate, round: i32) -> ApiResult<()> {
     let (xp, guest): (i64, bool) = users::table.find(uid).select((users::xp, users::is_guest)).first(conn).await?;
-    let rows: Vec<_> = quests::draw(uid, day, levels::level_for(xp), guest)
+    let rows: Vec<_> = quests::draw(uid, day, round, levels::level_for(xp), guest)
         .into_iter()
-        .map(|k| (quest_rows::user_id.eq(uid), quest_rows::day.eq(day), quest_rows::key.eq(k)))
+        .map(|k| {
+            (quest_rows::user_id.eq(uid), quest_rows::day.eq(day), quest_rows::round.eq(round), quest_rows::key.eq(k))
+        })
         .collect();
     diesel::insert_into(quest_rows::table).values(rows).on_conflict_do_nothing().execute(conn).await?;
     Ok(())
@@ -86,6 +99,7 @@ pub async fn apply(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]) -> 
         level_ups: vec![],
         quests: vec![],
         bonus: None,
+        next_round: None,
         achievements: vec![],
         tickets: vec![],
         coins: 0,
@@ -100,7 +114,7 @@ pub async fn apply(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]) -> 
     for level in levels::level_for(old_xp) + 1..=levels::level_for(xp) {
         let reward = levels::reward(level);
         give(conn, uid, &reward, &mut out).await?;
-        out.level_ups.push(Reward { what: level.to_string(), reward });
+        out.level_ups.push(Reward { what: level.to_string(), reward, goal: None });
     }
     out.level = levels::dto(xp);
 
@@ -144,10 +158,11 @@ async fn record_stats(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]) 
 
 async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event], out: &mut Progress) -> ApiResult<()> {
     let day = quest_day(conn, uid).await?;
-    ensure_quests(conn, uid, day).await?;
+    let round = ensure_quests(conn, uid, day).await?;
     let rows: Vec<(String, i32, Option<DateTime<Utc>>)> = quest_rows::table
         .filter(quest_rows::user_id.eq(uid))
         .filter(quest_rows::day.eq(day))
+        .filter(quest_rows::round.eq(round))
         .select((quest_rows::key, quest_rows::progress, quest_rows::done_at))
         .load(conn)
         .await?;
@@ -164,9 +179,10 @@ async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]
         if gained == 0 {
             continue;
         }
-        let now = (progress.saturating_add(gained)).min(q.goal);
-        let finished = now >= q.goal;
-        diesel::update(quest_rows::table.find((uid, day, &key)))
+        let goal = q.goal_in(round);
+        let now = (progress.saturating_add(gained)).min(goal);
+        let finished = now >= goal;
+        diesel::update(quest_rows::table.find((uid, day, round, &key)))
             .set((quest_rows::progress.eq(now), quest_rows::done_at.eq(finished.then(Utc::now))))
             .execute(conn)
             .await?;
@@ -177,24 +193,31 @@ async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]
                 .set(stats::quests_done.eq(stats::quests_done + 1))
                 .execute(conn)
                 .await?;
-            give(conn, uid, &q.reward, out).await?;
-            out.quests.push(Reward { what: key, reward: q.reward });
+            let reward = q.reward_in(round);
+            give(conn, uid, &reward, out).await?;
+            out.quests.push(Reward { what: key, reward, goal: Some(goal) });
         }
     }
     if real == quests::PER_DAY && done == real && !out.quests.is_empty() {
-        // Only the first time the day's three are done
+        // Once per round: the round's bonus, and the next round
         let paid = diesel::sql_query(
-            "INSERT INTO quest_days (user_id, day, bonus_at) VALUES ($1, $2, now())
-             ON CONFLICT (user_id, day) DO UPDATE SET bonus_at = now() WHERE quest_days.bonus_at IS NULL",
+            "INSERT INTO quest_days (user_id, day, bonus_at, bonuses) VALUES ($1, $2, now(), $3)
+             ON CONFLICT (user_id, day) DO UPDATE SET bonus_at = now(), bonuses = EXCLUDED.bonuses
+             WHERE quest_days.bonuses < EXCLUDED.bonuses",
         )
         .bind::<BigInt, _>(uid)
         .bind::<diesel::sql_types::Date, _>(day)
+        .bind::<Integer, _>(round)
         .execute(conn)
         .await?;
         if paid == 1 {
             out.xp_gained += events::BONUS_XP;
             give(conn, uid, &quests::BONUS, out).await?;
             out.bonus = Some(quests::BONUS);
+            if round < quests::ROUNDS {
+                open_round(conn, uid, day, round + 1).await?;
+                out.next_round = Some(round + 1);
+            }
         }
     }
     Ok(())
@@ -248,7 +271,7 @@ async fn award_achievements(
             .await?;
         if added == 1 {
             give(conn, uid, &a.reward, out).await?;
-            out.achievements.push(Reward { what: a.id.to_owned(), reward: a.reward });
+            out.achievements.push(Reward { what: a.id.to_owned(), reward: a.reward, goal: None });
         }
     }
     Ok(())

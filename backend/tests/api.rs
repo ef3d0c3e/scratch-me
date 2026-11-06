@@ -518,6 +518,7 @@ async fn quests_pay_once_and_the_bonus_once() {
     let done: Vec<&str> = p["quests"].as_array().unwrap().iter().map(|q| q["what"].as_str().unwrap()).collect();
     assert_eq!(done, ["scratch_5", "win_3"]);
     assert_eq!(p["bonus"], json!({ "kind": "ticket", "series": "ticket_chain" }));
+    assert_eq!(p["next_round"], 2, "three harder quests open");
     // 50 won, 100 for scratch_5; win_3 gives a Lucky Three, the bonus a chain
     assert_eq!(body["coins"], STARTING_COINS + 150);
     let series: Vec<&str> = p["tickets"].as_array().unwrap().iter().map(|t| t["series"].as_str().unwrap()).collect();
@@ -530,7 +531,81 @@ async fn quests_pay_once_and_the_bonus_once() {
     assert_eq!(body["progress"]["quests"], json!([]));
     assert_eq!(body["progress"]["bonus"], Value::Null);
     let (_, q) = get(&app, "/api/quests", &me).await;
-    assert_eq!(q["bonus_done"], true);
+    assert_eq!((q["round"].as_i64(), q["bonus_done"].as_bool()), (Some(2), Some(false)), "on to round 2");
+}
+
+#[actix_web::test]
+async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("rounds");
+    let me = register(&app, &name, "UTC").await;
+    set_quests(&name, &[("scratch_5", 4), ("pocket", 1), ("win_3", 2)]).await;
+    diesel::sql_query("UPDATE quests SET done_at = now() WHERE key = 'pocket' AND user_id = (SELECT id FROM users WHERE username = $1)")
+        .bind::<diesel::sql_types::Text, _>(&name)
+        .execute(&mut conn().await)
+        .await
+        .unwrap();
+    let win = || {
+        known_ticket(
+            &name,
+            "lucky_three",
+            json!({ "cells": vec!["clover"; 9], "win": "clover" }),
+            json!({ "kind": "coins", "amount": 10 }),
+        )
+    };
+    let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
+    assert_eq!(body["progress"]["next_round"], 2);
+    let (_, q) = get(&app, "/api/quests", &me).await;
+    assert_eq!((q["round"].as_i64(), q["rounds"].as_i64()), (Some(2), Some(4)));
+    let items = q["items"].as_array().unwrap();
+    assert_eq!(items.len(), 3);
+    for item in items {
+        assert_ne!(item["key"], "envelope", "opens once a day");
+        assert_eq!((item["progress"].as_i64(), item["done"].as_bool()), (Some(0), Some(false)));
+        let base = match item["key"].as_str().unwrap() {
+            "scratch_5" => 5,
+            "win_3" => 3,
+            "coins_300" => 300,
+            _ => 1,
+        };
+        assert_eq!(item["goal"].as_i64().unwrap(), (base * 3 + 1) / 2, "{item}");
+    }
+
+    // The fourth round: its bonus is the day's last, and no fifth opens
+    let c = &mut conn().await;
+    let uid = user_id(&name).await;
+    diesel::sql_query("DELETE FROM quests WHERE user_id = $1")
+        .bind::<diesel::sql_types::BigInt, _>(uid)
+        .execute(c)
+        .await
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO quests (user_id, day, round, key, progress, done_at)
+         SELECT id, (now() AT TIME ZONE tz)::date, 4, k, p, d FROM users,
+           (VALUES ('scratch_5', 12, NULL::timestamptz), ('pocket', 3, now()), ('buy', 3, now())) v(k, p, d)
+         WHERE id = $1",
+    )
+    .bind::<diesel::sql_types::BigInt, _>(uid)
+    .execute(c)
+    .await
+    .unwrap();
+    diesel::sql_query("UPDATE quest_days SET bonuses = 3 WHERE user_id = $1")
+        .bind::<diesel::sql_types::BigInt, _>(uid)
+        .execute(c)
+        .await
+        .unwrap();
+    let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
+    let p = &body["progress"];
+    assert_eq!(p["quests"][0]["what"], "scratch_5");
+    assert_eq!(p["quests"][0]["goal"], 13);
+    assert_eq!(p["quests"][0]["reward"], json!({ "kind": "coins", "amount": 250 }));
+    assert_eq!(p["bonus"]["kind"], "ticket");
+    assert_eq!(p["next_round"], Value::Null);
+    let (_, q) = get(&app, "/api/quests", &me).await;
+    assert_eq!((q["round"].as_i64(), q["bonus_done"].as_bool()), (Some(4), Some(true)));
+    let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
+    assert_eq!(body["progress"]["bonus"], Value::Null, "four rounds a day");
 }
 
 #[actix_web::test]

@@ -1,5 +1,6 @@
-//! Daily quests: three a day from a pool, drawn from the player and the day
-//! (so they stay put), only among those the player's level can do.
+//! Daily quests: three at a time from a pool, drawn from the player, the day
+//! and the round (so they stay put), only among those the player's level can
+//! do. Finishing a round's three opens three harder ones, up to `ROUNDS` a day.
 
 use chrono::{Datelike, NaiveDate};
 use rand::SeedableRng;
@@ -16,7 +17,11 @@ pub struct Quest {
     pub min_level: i32,
 }
 
+/// Quests in a round
 pub const PER_DAY: usize = 3;
+
+/// Rounds a day: the first, and three harder ones
+pub const ROUNDS: i32 = 4;
 
 pub fn pool() -> Vec<Quest> {
     use Series::*;
@@ -34,8 +39,30 @@ pub fn pool() -> Vec<Quest> {
     ]
 }
 
-/// All three done
+/// A round's three done
 pub const BONUS: Prize = Prize::Ticket { series: Series::TicketChain };
+
+impl Quest {
+    /// Its goal in `round`: half the first round's again each round, rounded up
+    pub fn goal_in(&self, round: i32) -> i32 {
+        let r = round.clamp(1, ROUNDS);
+        (self.goal * (r + 1) + 1) / 2
+    }
+
+    /// Its reward in `round`: coins grow with the goal, tickets stay
+    pub fn reward_in(&self, round: i32) -> Prize {
+        let r = round.clamp(1, ROUNDS) as i64;
+        match self.reward {
+            Prize::Coins { amount } => Prize::Coins { amount: (amount * (r + 1) + 1) / 2 },
+            ref other => other.clone(),
+        }
+    }
+
+    /// Can come back in a later round: the envelope opens once a day
+    fn repeats(&self) -> bool {
+        self.key != "envelope"
+    }
+}
 
 pub fn quest(key: &str) -> Option<Quest> {
     pool().into_iter().find(|q| q.key == key)
@@ -62,25 +89,29 @@ fn rng(uid: i64, day: NaiveDate, salt: u64) -> rand::rngs::StdRng {
     rand::rngs::StdRng::seed_from_u64(seed)
 }
 
-/// Whether a player can take a quest: its level, and no chat for guests
-fn open_to(q: &Quest, level: i32, guest: bool) -> bool {
-    q.min_level <= level && !(guest && q.key == "shout")
+/// Whether a player can take a quest: its level, no chat for guests, and
+/// after the first round only those that can be done again
+fn open_to(q: &Quest, round: i32, level: i32, guest: bool) -> bool {
+    q.min_level <= level && !(guest && q.key == "shout") && (round <= 1 || q.repeats())
 }
 
-/// The day's three for a player at `level`
-pub fn draw(uid: i64, day: NaiveDate, level: i32, guest: bool) -> Vec<&'static str> {
-    let open: Vec<&'static str> = pool().into_iter().filter(|q| open_to(q, level, guest)).map(|q| q.key).collect();
-    open.choose_multiple(&mut rng(uid, day, 0), PER_DAY).copied().collect()
+/// A round's three for a player at `level`
+pub fn draw(uid: i64, day: NaiveDate, round: i32, level: i32, guest: bool) -> Vec<&'static str> {
+    let open: Vec<&'static str> =
+        pool().into_iter().filter(|q| open_to(q, round, level, guest)).map(|q| q.key).collect();
+    // Round 1 keeps the salt it always had: today's quests do not move
+    let salt = (round.max(1) as u64 - 1).wrapping_mul(0x5851_F42D);
+    open.choose_multiple(&mut rng(uid, day, salt), PER_DAY).copied().collect()
 }
 
-/// A replacement for a rerolled quest: one the player does not have today
-pub fn reroll(uid: i64, day: NaiveDate, level: i32, guest: bool, have: &[String]) -> Option<&'static str> {
+/// A replacement for a rerolled quest: one the player does not have in this round
+pub fn reroll(uid: i64, day: NaiveDate, round: i32, level: i32, guest: bool, have: &[String]) -> Option<&'static str> {
     let open: Vec<&'static str> = pool()
         .into_iter()
-        .filter(|q| open_to(q, level, guest) && !have.iter().any(|h| h == q.key))
+        .filter(|q| open_to(q, round, level, guest) && !have.iter().any(|h| h == q.key))
         .map(|q| q.key)
         .collect();
-    open.choose(&mut rng(uid, day, 0xA5A5)).copied()
+    open.choose(&mut rng(uid, day, 0xA5A5 ^ (round.max(1) as u64 - 1))).copied()
 }
 
 #[cfg(test)]
@@ -94,12 +125,12 @@ mod tests {
 
     #[test]
     fn three_a_day_steady_within_the_day_and_varied() {
-        let a = draw(7, d("2026-11-06"), 1, false);
+        let a = draw(7, d("2026-11-06"), 1, 1, false);
         assert_eq!(a.len(), PER_DAY);
-        assert_eq!(a, draw(7, d("2026-11-06"), 1, false));
+        assert_eq!(a, draw(7, d("2026-11-06"), 1, 1, false));
         let mut days = std::collections::HashSet::new();
         for i in 0..20 {
-            days.insert(draw(7, d("2026-11-06") + chrono::Days::new(i), 1, false));
+            days.insert(draw(7, d("2026-11-06") + chrono::Days::new(i), 1, 1, false));
         }
         assert!(days.len() > 5, "quests change from day to day");
     }
@@ -107,16 +138,16 @@ mod tests {
     #[test]
     fn never_beyond_the_level() {
         for uid in 0..200 {
-            let q = draw(uid, d("2026-11-06"), 1, false);
+            let q = draw(uid, d("2026-11-06"), 1, 1, false);
             assert!(!q.contains(&"cash_wheel") && !q.contains(&"number_match"));
         }
-        assert!((0..200).any(|uid| draw(uid, d("2026-11-06"), 5, false).contains(&"cash_wheel")));
+        assert!((0..200).any(|uid| draw(uid, d("2026-11-06"), 1, 5, false).contains(&"cash_wheel")));
     }
 
     #[test]
     fn reroll_brings_a_new_one() {
-        let have: Vec<String> = draw(3, d("2026-11-06"), 5, false).iter().map(|s| s.to_string()).collect();
-        let new = reroll(3, d("2026-11-06"), 5, false, &have).unwrap();
+        let have: Vec<String> = draw(3, d("2026-11-06"), 1, 5, false).iter().map(|s| s.to_string()).collect();
+        let new = reroll(3, d("2026-11-06"), 1, 5, false, &have).unwrap();
         assert!(!have.iter().any(|h| h == new));
     }
 
@@ -135,15 +166,41 @@ mod tests {
     }
 
     #[test]
+    fn later_rounds_ask_a_little_more() {
+        let goals = |key| (1..=ROUNDS).map(|r| quest(key).unwrap().goal_in(r)).collect::<Vec<_>>();
+        assert_eq!(goals("scratch_5"), [5, 8, 10, 13]);
+        assert_eq!(goals("coins_300"), [300, 450, 600, 750]);
+        assert_eq!(goals("pocket"), [1, 2, 2, 3]);
+        let scratch = quest("scratch_5").unwrap();
+        assert_eq!(scratch.reward_in(1), Prize::Coins { amount: 100 });
+        assert_eq!(scratch.reward_in(4), Prize::Coins { amount: 250 });
+        assert_eq!(quest("win_3").unwrap().reward_in(3), Prize::Ticket { series: Series::LuckyThree });
+    }
+
+    #[test]
+    fn later_rounds_are_new_draws_without_the_envelope() {
+        let day = d("2026-11-06");
+        assert!((0..300).any(|uid| draw(uid, day, 1, 1, false).contains(&"envelope")));
+        for uid in 0..300 {
+            for round in 2..=ROUNDS {
+                let q = draw(uid, day, round, 1, false);
+                assert_eq!(q.len(), PER_DAY);
+                assert!(!q.contains(&"envelope"));
+            }
+        }
+        assert!((0..50).any(|uid| draw(uid, day, 1, 1, false) != draw(uid, day, 2, 1, false)));
+    }
+
+    #[test]
     fn guests_get_no_chat_quest() {
         let day = d("2026-11-06");
-        assert!((0..300).any(|uid| draw(uid, day, 1, false).contains(&"shout")));
+        assert!((0..300).any(|uid| draw(uid, day, 1, 1, false).contains(&"shout")));
         for uid in 0..300 {
-            assert!(!draw(uid, day, 1, true).contains(&"shout"));
-            let have: Vec<String> = draw(uid, day, 1, true).iter().map(|s| s.to_string()).collect();
+            assert!(!draw(uid, day, 1, 1, true).contains(&"shout"));
+            let have: Vec<String> = draw(uid, day, 1, 1, true).iter().map(|s| s.to_string()).collect();
             // Rerolled until nothing is left: never the shout
             let mut have = have;
-            while let Some(k) = reroll(uid, day, 1, true, &have) {
+            while let Some(k) = reroll(uid, day, 1, 1, true, &have) {
                 assert_ne!(k, "shout");
                 have.push(k.to_owned());
             }
