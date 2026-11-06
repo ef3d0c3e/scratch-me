@@ -27,10 +27,20 @@ The ports differ from AnyCardz's, so both can run side by side. The API runs its
 | `make check`    | clippy, rustfmt, svelte-check, prettier                              |
 | `make fmt`      | Format Rust and frontend code                                        |
 
-## What is in so far (M1)
+Announcements are posted by admins, from the Chat page. To make a player an admin:
+
+```sh
+cargo run -p scratchme-api -- make-admin <username>
+```
+
+## What is in so far
 
 - Accounts (sign up, log in, log out), with the player's time zone
 - Lucky Three: a 3×3 grid where three of a kind wins coins, another ticket or a pocket refill
 - Pocket: one free ticket every 2 hours, holds 3
 - Daily envelope: one per calendar day, with a 7-day streak cycle
-- Scratch canvas: finger-speed brush, falling foil flakes, auto-reveal at 62 %
+- Scratch canvas: finger-speed brush, falling foil flakes, the rest falls off once every square is mostly scratched
+- Five ticket series (Lucky Three, Number Match, Ticket Chain, Cash Wheel, Golden Ticket), a shop, themes and scratch tools
+- Celebrations scaled to the prize, scratch sound and haptics, tilt shimmer
+- Levels, daily quests, achievements
+- Shoutbox and live feed of big wins over a WebSocket, announcements, profiles and titles
