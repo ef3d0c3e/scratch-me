@@ -1005,16 +1005,19 @@ async fn pot_tickets_fill_the_pot_and_one_entry_wins_it() {
     // chores too and may draw it first, on their own hub: the hub's own test
     // checks the news goes out.)
     let uid = user_id(&name).await;
-    let day =
-        chrono::NaiveDate::from_ymd_opt(2001, 1, 1).unwrap() + chrono::Days::new(rand::random::<u32>() as u64 % 3000);
     let mut c = conn().await;
-    diesel::insert_into(schema::pots::table)
-        .values((schema::pots::day.eq(day), schema::pots::amount.eq(777i64)))
+    // A day no pot has: before the earliest one (earlier runs leave theirs)
+    let earliest: Option<chrono::NaiveDate> =
+        schema::pots::table.select(diesel::dsl::min(schema::pots::day)).first(&mut c).await.unwrap();
+    let day = earliest.unwrap_or_else(|| chrono::Utc::now().date_naive()) - chrono::Days::new(1);
+    // The entry first: other tests' chores may draw the pot the moment it exists
+    diesel::insert_into(schema::pot_entries::table)
+        .values((schema::pot_entries::day.eq(day), schema::pot_entries::user_id.eq(uid)))
         .execute(&mut c)
         .await
         .unwrap();
-    diesel::insert_into(schema::pot_entries::table)
-        .values((schema::pot_entries::day.eq(day), schema::pot_entries::user_id.eq(uid)))
+    diesel::insert_into(schema::pots::table)
+        .values((schema::pots::day.eq(day), schema::pots::amount.eq(777i64)))
         .execute(&mut c)
         .await
         .unwrap();
@@ -1200,4 +1203,60 @@ async fn guests_nobody_can_reach_are_forgotten() {
         .unwrap();
     assert_eq!(left, vec![member], "the lost guest is gone, the member stays");
     assert_eq!(get(&app, "/api/me", &kept).await.0, 200);
+}
+
+#[actix_web::test]
+async fn guests_neither_give_nor_duel_nor_are_given_or_challenged() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let g = guest(&app).await;
+    let gname = get(&app, "/api/me", &g).await.1["username"].as_str().unwrap().to_owned();
+    let member = unique("member");
+    let m = register(&app, &member, "UTC").await;
+
+    // From a guest: refused before any coin moves
+    let gift = |to: &str| json!({ "kind": "ticket", "series": "lucky_three", "to": to });
+    let (status, body) = post_json(&app, "/api/shop/buy", &g, gift(&member)).await;
+    assert_eq!((status, body["error"].as_str()), (403, Some("guest")));
+    let (status, _) = post_json(&app, "/api/duels", &g, json!({ "opponent": member })).await;
+    assert_eq!(status, 403);
+    assert_eq!(get(&app, "/api/duels", &g).await.0, 403);
+    assert_eq!(get(&app, "/api/me", &g).await.1["coins"], STARTING_COINS);
+
+    // To a guest: refused too, and the member keeps their coins
+    let (status, body) = post_json(&app, "/api/shop/buy", &m, gift(&gname)).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("player_is_guest")));
+    let (status, body) = post_json(&app, "/api/duels", &m, json!({ "opponent": gname })).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("player_is_guest")));
+    assert_eq!(get(&app, "/api/me", &m).await.1["coins"], STARTING_COINS);
+
+    // Profiles say who is a guest, so the app offers nothing
+    assert_eq!(get(&app, &format!("/api/players/{gname}"), &m).await.1["guest"], true);
+    assert_eq!(get(&app, &format!("/api/players/{member}"), &g).await.1["guest"], false);
+}
+
+#[actix_web::test]
+async fn pocket_tickets_grow_with_the_level() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("pocketlvl");
+    let me = register(&app, &name, "UTC").await;
+    assert_eq!(get(&app, "/api/me", &me).await.1["pocket_worth"], 35);
+    // Level 10: tickets worth up to 125, none worth less than half of it
+    set_xp(&name, scratchme_api::progress::levels::xp_for(10)).await;
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["pocket_worth"], 125);
+    let (status, body) = post(&app, "/api/pocket/claim", &me).await;
+    assert_eq!(status, 200);
+    let shop = get(&app, "/api/shop", &me).await.1;
+    let price = |series: &Value| {
+        shop["tickets"].as_array().unwrap().iter().find(|t| t["series"] == *series).unwrap()["price"].as_i64().unwrap()
+    };
+    let tickets = body["tickets"].as_array().unwrap();
+    assert_eq!(tickets.len(), 3);
+    for t in tickets {
+        let p = price(&t["series"]);
+        assert!((63..=125).contains(&p), "{} costs {p}", t["series"]);
+        assert_eq!(t["source"], "pocket");
+    }
 }

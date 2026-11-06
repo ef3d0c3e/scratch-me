@@ -1,6 +1,6 @@
 export default {
 	'app.name': 'Scratch-me',
-	'app.tagline': 'Free tickets every few hours. Scratch, win, come back.',
+	'app.tagline': 'A free ticket every 20 minutes. Scratch, win, come back.',
 
 	'auth.login.title': 'Welcome back',
 	'auth.login.lead': 'Your pocket has been filling up.',
@@ -25,7 +25,7 @@ export default {
 	'lobby.stack_one': '{n} ticket to scratch',
 	'lobby.stack_other': '{n} tickets to scratch',
 	'lobby.stack_empty': 'No tickets right now',
-	'lobby.stack_empty_hint': 'Your pocket refills one every two hours.',
+	'lobby.stack_empty_hint': 'Your pocket refills one every 20 minutes.',
 	'lobby.scratch_next': 'Scratch',
 	'lobby.pocket': 'Pocket',
 	'lobby.pocket_ready_one': '{n} ticket ready',
@@ -494,9 +494,10 @@ export default {
 	'errors.duel': 'That duel is over.',
 	'auth.or': 'or',
 	'auth.guest': 'Play as a guest',
-	'auth.guest_hint': 'No sign-up: you can keep your progress later. Guests have no chat.',
+	'auth.guest_hint':
+		'No sign-up: you can keep your progress later. Guests have no chat, gifts or duels.',
 	'guest.title': 'Playing as a guest',
-	'guest.lead': 'Sign up to keep your progress and join the chat.',
+	'guest.lead': 'Sign up to keep your progress, chat, send gifts and duel.',
 	'guest.keep': 'Sign up',
 	'keep.title': 'Keep your progress',
 	'keep.lead': 'Your coins, tickets, levels and trophies all stay. Pick a name to play under.',
@@ -504,5 +505,7 @@ export default {
 	'keep.done': 'Welcome, {name}! Your progress is saved.',
 	'errors.username_reserved': 'Names starting with “guest” are for guests.',
 	'errors.not_a_guest': 'This account is already yours.',
-	'errors.guest': 'Sign up to use the chat.'
+	'errors.guest': 'Sign up to play with others.',
+	'errors.player_is_guest': 'That player is a guest: they have no gifts or duels.',
+	'lobby.pocket_worth': 'Up to {n} coins each, more as you level'
 } as const;

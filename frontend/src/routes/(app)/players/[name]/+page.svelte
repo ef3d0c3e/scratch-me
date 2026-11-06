@@ -144,7 +144,8 @@
 				{/each}
 			</select>
 		</label>
-	{:else}
+	{:else if !session.me.guest && !p.guest}
+		<!-- Gifts, duels and mutes are between members: guests have none -->
 		<div class="acts">
 			{#if giving}
 				<label class="pick">

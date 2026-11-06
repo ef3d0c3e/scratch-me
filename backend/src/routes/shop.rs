@@ -109,16 +109,20 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
             coins.ok_or(ApiError::Conflict("not_enough_coins"))?;
             match buy {
                 Buy::Ticket { series, to: Some(to) } => {
-                    // A gift: drawn for the other player, marked with the sender
-                    let (rid, rname): (i64, String) = users::table
+                    // A gift: drawn for the other player, marked with the sender. Members only, both sides.
+                    user.member()?;
+                    let (rid, rname, guest): (i64, String, bool) = users::table
                         .filter(lower(users::username).eq(to.to_lowercase()))
-                        .select((users::id, users::username))
+                        .select((users::id, users::username, users::is_guest))
                         .first(conn)
                         .await
                         .optional()?
                         .ok_or(ApiError::NotFound("player"))?;
                     if rid == user.id {
                         return Err(ApiError::Invalid("gift_to_self"));
+                    }
+                    if guest {
+                        return Err(ApiError::Conflict("player_is_guest"));
                     }
                     let mut ticket = issue(conn, rid, series, Source::Gift, 1).await?.pop().expect("one ticket");
                     diesel::update(tickets::table.find(ticket.id))

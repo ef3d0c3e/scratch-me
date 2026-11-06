@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { visit } from './helpers';
+import { newPlayer, visit } from './helpers';
 
 test('a guest plays at once, has no chat, then signs up and keeps it all', async ({ page }) => {
 	await visit(page, '/register');
@@ -54,4 +54,26 @@ test('the login page offers to play as a guest too', async ({ page }) => {
 	await page.getByRole('button', { name: 'Play as a guest' }).click();
 	await page.waitForURL('/');
 	await expect(page.getByRole('complementary', { name: 'Playing as a guest' })).toBeVisible();
+});
+
+test('guests and members offer each other no gifts or duels', async ({ page, browser }) => {
+	const member = await newPlayer(page);
+	const ctx = await browser.newContext({ baseURL: 'http://localhost:5174' });
+	const g = await ctx.newPage();
+	await visit(g, '/login');
+	await g.getByRole('button', { name: 'Play as a guest' }).click();
+	await g.waitForURL('/');
+	const guest: string = (await (await g.request.get('/api/me')).json()).username;
+	await expect(g.getByRole('region', { name: /Duels/ })).toHaveCount(0);
+
+	// The guest looks at a member: nothing to send
+	await visit(g, `/players/${member}`);
+	await expect(g.getByRole('heading', { name: member })).toBeVisible();
+	await expect(g.getByRole('button', { name: /Send a ticket|Challenge|Mute/ })).toHaveCount(0);
+
+	// The member looks at the guest: nothing either
+	await visit(page, `/players/${guest}`);
+	await expect(page.getByRole('heading', { name: guest })).toBeVisible();
+	await expect(page.getByRole('button', { name: /Send a ticket|Challenge|Mute/ })).toHaveCount(0);
+	await ctx.close();
 });

@@ -84,20 +84,24 @@ pub async fn challenge(
     user: CurrentUser,
     body: web::Json<Challenge>,
 ) -> ApiResult<web::Json<DuelDto>> {
+    user.member()?;
     let wanted = body.into_inner().opponent.to_lowercase();
     let mut conn = state.pool.get().await?;
     let uid = user.id;
     let (id, oid) = conn
         .transaction(async move |conn| {
-            let oid: i64 = users::table
+            let (oid, guest): (i64, bool) = users::table
                 .filter(lower(users::username).eq(&wanted))
-                .select(users::id)
+                .select((users::id, users::is_guest))
                 .first(conn)
                 .await
                 .optional()?
                 .ok_or(ApiError::NotFound("player"))?;
             if oid == uid {
                 return Err(ApiError::Invalid("duel_self"));
+            }
+            if guest {
+                return Err(ApiError::Conflict("player_is_guest"));
             }
             if !pay(conn, uid, -STAKE).await? {
                 return Err(ApiError::Conflict("not_enough_coins"));
@@ -116,6 +120,7 @@ pub async fn challenge(
 
 #[get("/duels")]
 pub async fn list(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<Vec<DuelDto>>> {
+    user.member()?;
     let mut conn = state.pool.get().await?;
     let ids: Vec<i64> = duels::table
         .filter(duels::challenger_id.eq(user.id).or(duels::opponent_id.eq(user.id)))
@@ -146,6 +151,7 @@ pub async fn answer(
     path: web::Path<i64>,
     body: web::Json<Answer>,
 ) -> ApiResult<web::Json<DuelDto>> {
+    user.member()?;
     let id = path.into_inner();
     let action = body.into_inner().action;
     let uid = user.id;

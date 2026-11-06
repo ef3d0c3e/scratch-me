@@ -325,6 +325,8 @@ pub struct ProfileDto {
     pub achievements: Vec<String>,
     /// The viewer muted them
     pub muted: bool,
+    /// No gifts, duels or chat with a guest
+    pub guest: bool,
 }
 
 #[get("/players/{name}")]
@@ -335,9 +337,10 @@ pub async fn profile(
 ) -> ApiResult<web::Json<ProfileDto>> {
     let mut conn = state.pool.get().await?;
     let id = user_id(&mut conn, &path).await?;
-    let (username, xp, title, theme, joined): (String, i64, Option<String>, String, DateTime<Utc>) = users::table
+    type Row = (String, i64, Option<String>, String, DateTime<Utc>, bool);
+    let (username, xp, title, theme, joined, guest): Row = users::table
         .find(id)
-        .select((users::username, users::xp, users::title, users::theme, users::created_at))
+        .select((users::username, users::xp, users::title, users::theme, users::created_at, users::is_guest))
         .first(&mut conn)
         .await?;
     let (scratched, wins, best_win): (i32, i32, i64) = stats::table
@@ -369,6 +372,7 @@ pub async fn profile(
         best_streak,
         achievements: earned,
         muted,
+        guest,
     }))
 }
 

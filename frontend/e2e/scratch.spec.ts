@@ -11,9 +11,11 @@ test('a new player takes the pocket and scratches a ticket', async ({ page }) =>
 
 	await page.getByRole('button', { name: 'Take' }).click();
 	await expect(page.getByText('3 tickets to scratch')).toBeVisible();
-	await expect(page.getByText(/Next in 1:59:/)).toBeVisible();
+	await expect(page.getByText(/Next in 19:/)).toBeVisible();
+	await expect(page.getByText('Up to 35 coins each, more as you level')).toBeVisible();
 
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+	// Level 1's pocket: the classic
 	const sheet = page.getByRole('dialog', { name: 'Lucky Three' });
 	await expect(sheet).toBeVisible();
 	await expect(sheet.getByRole('button', { name: 'Reveal all' })).toBeEnabled();

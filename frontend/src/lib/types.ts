@@ -103,6 +103,8 @@ export interface MeDto {
 	is_admin: boolean;
 	/** Playing without an account: no chat, and signing up keeps it all */
 	guest: boolean;
+	/** What a pocket ticket is worth at most, at the player's level */
+	pocket_worth: number;
 	tickets: TicketDto[];
 }
 
@@ -280,6 +282,8 @@ export interface Shouted {
 
 export interface ProfileDto {
 	username: string;
+	/** No gifts, duels or chat with a guest */
+	guest: boolean;
 	level: LevelDto;
 	title: string | null;
 	theme: ThemeId;

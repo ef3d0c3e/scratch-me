@@ -2,7 +2,7 @@ import type en from './en';
 
 export default {
 	'app.name': 'Scratch-me',
-	'app.tagline': 'Des tickets gratuits toutes les deux heures. Grattez, gagnez, revenez.',
+	'app.tagline': 'Un ticket gratuit toutes les 20 minutes. Grattez, gagnez, revenez.',
 
 	'auth.login.title': 'Bon retour',
 	'auth.login.lead': 'Votre poche s’est remplie.',
@@ -27,7 +27,7 @@ export default {
 	'lobby.stack_one': '{n} ticket à gratter',
 	'lobby.stack_other': '{n} tickets à gratter',
 	'lobby.stack_empty': 'Aucun ticket pour l’instant',
-	'lobby.stack_empty_hint': 'Votre poche se remplit d’un ticket toutes les deux heures.',
+	'lobby.stack_empty_hint': 'Votre poche se remplit d’un ticket toutes les 20 minutes.',
 	'lobby.scratch_next': 'Gratter',
 	'lobby.pocket': 'Poche',
 	'lobby.pocket_ready_one': '{n} ticket prêt',
@@ -501,9 +501,10 @@ export default {
 	'auth.or': 'ou',
 	'auth.guest': 'Jouer en invité',
 	'auth.guest_hint':
-		'Sans inscription : vous pourrez garder votre progression plus tard. Pas de chat pour les invités.',
+		'Sans inscription : vous pourrez garder votre progression plus tard. Pas de chat, de cadeaux ni de duels pour les invités.',
 	'guest.title': 'Vous jouez en invité',
-	'guest.lead': 'Inscrivez-vous pour garder votre progression et rejoindre le chat.',
+	'guest.lead':
+		'Inscrivez-vous pour garder votre progression, discuter, offrir des tickets et lancer des duels.',
 	'guest.keep': 'S’inscrire',
 	'keep.title': 'Garder votre progression',
 	'keep.lead': 'Vos pièces, tickets, niveaux et trophées restent. Choisissez un nom de joueur.',
@@ -511,5 +512,7 @@ export default {
 	'keep.done': 'Bienvenue, {name} ! Votre progression est sauvegardée.',
 	'errors.username_reserved': 'Les noms commençant par « guest » sont réservés aux invités.',
 	'errors.not_a_guest': 'Ce compte est déjà le vôtre.',
-	'errors.guest': 'Inscrivez-vous pour utiliser le chat.'
+	'errors.guest': 'Inscrivez-vous pour jouer avec les autres.',
+	'errors.player_is_guest': 'Ce joueur est un invité : pas de cadeaux ni de duels.',
+	'lobby.pocket_worth': 'Jusqu’à {n} pièces chacun, plus en montant de niveau'
 } satisfies Record<keyof typeof en, string>;

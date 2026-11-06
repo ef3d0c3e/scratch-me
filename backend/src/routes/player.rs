@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::Serialize;
 
-use super::tickets::{TicketDto, issue, issue_each};
+use super::tickets::{TicketDto, issue_each};
 use crate::AppState;
 use crate::auth::{CurrentUser, parse_tz};
 use crate::cosmetics::Cosmetic;
@@ -36,6 +36,8 @@ pub struct MeDto {
     pub username: String,
     pub coins: i64,
     pub pocket: Pocket,
+    /// What a pocket ticket is worth at most, at the player's level
+    pub pocket_worth: i64,
     pub envelope: EnvelopeDto,
     /// What the player has on
     pub theme: String,
@@ -113,6 +115,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         username: user.username,
         coins,
         pocket: pocket::level(stored, at, now),
+        pocket_worth: pocket::worth(levels::level_for(xp)),
         envelope,
         theme,
         tool,
@@ -141,9 +144,9 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
     let out = conn
         .transaction(async move |conn| {
             // The row lock makes concurrent claims take turns
-            let (stored, at): (i32, DateTime<Utc>) = users::table
+            let (stored, at, xp): (i32, DateTime<Utc>, i64) = users::table
                 .find(user.id)
-                .select((users::pocket_count, users::pocket_at))
+                .select((users::pocket_count, users::pocket_at, users::xp))
                 .for_update()
                 .first(conn)
                 .await?;
@@ -156,7 +159,10 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
                 .set((users::pocket_count.eq(0), users::pocket_at.eq(new_at)))
                 .execute(conn)
                 .await?;
-            let tickets = issue(conn, user.id, Series::LuckyThree, Source::Pocket, n).await?;
+            // Each one drawn for the player's level
+            let level = levels::level_for(xp);
+            let series: Vec<Series> = (0..n).map(|_| pocket::pick(level, now.date_naive(), &mut rand::rng())).collect();
+            let tickets = issue_each(conn, user.id, &series, Source::Pocket).await?;
             let progress = progress::apply(conn, user.id, &[Event::PocketTaken(n)]).await?;
             Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now), progress })
         })

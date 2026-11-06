@@ -1,12 +1,52 @@
-//! The pocket: free Lucky Three tickets that refill over time. It holds up to
-//! SIZE; one comes back every REFILL while it is not full. Stored lazily as
+//! The pocket: free tickets that refill over time. It holds up to SIZE; one
+//! comes back every REFILL while it is not full. Stored lazily as
 //! (count, at): `count` held at `at`, refills counted from `at`.
+//!
+//! What each ticket is grows with the player's level: a shop ticket their
+//! level opens, priced within `worth(level)`.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
+use rand::Rng;
 use serde::Serialize;
 
+use crate::progress::levels;
+use crate::tickets::Series;
+
 pub const SIZE: i32 = 3;
-pub const REFILL: Duration = Duration::hours(2);
+pub const REFILL: Duration = Duration::minutes(20);
+
+/// The most a pocket ticket is worth (its shop price) at a level
+pub fn worth(level: i32) -> i64 {
+    (35 + 10 * (level.max(1) as i64 - 1)).min(300)
+}
+
+/// One pocket ticket for a player at `level`: among the shop tickets their
+/// level opens (and in season), priced between half the level's worth and
+/// all of it. The pricier, the likelier. Level 1 starts on the classic.
+pub fn pick(level: i32, today: NaiveDate, rng: &mut impl Rng) -> Series {
+    if level <= 1 {
+        return Series::LuckyThree;
+    }
+    let top = worth(level);
+    let open: Vec<(Series, i64)> = Series::ALL
+        .into_iter()
+        .filter(|s| *s != Series::PotTicket && levels::shop_level(*s) <= level && s.in_season(today))
+        .filter_map(|s| s.price().map(|p| (s, p)))
+        .filter(|(_, p)| *p <= top && *p * 2 >= top)
+        .collect();
+    let total: i64 = open.iter().map(|(_, p)| p).sum();
+    if total == 0 {
+        return Series::LuckyThree;
+    }
+    let mut roll = rng.random_range(0..total);
+    for (s, p) in &open {
+        if roll < *p {
+            return *s;
+        }
+        roll -= p;
+    }
+    unreachable!("the roll falls within the total")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Pocket {
@@ -86,8 +126,32 @@ mod tests {
     }
 
     #[test]
+    fn tickets_grow_with_the_level() {
+        let day: NaiveDate = "2026-03-01".parse().unwrap();
+        let mut rng = rand::rng();
+        let mean = |level: i32, rng: &mut rand::rngs::ThreadRng| {
+            (0..2000).map(|_| pick(level, day, rng).price().unwrap()).sum::<i64>() as f64 / 2000.0
+        };
+        for level in 1..=40 {
+            for _ in 0..200 {
+                let s = pick(level, day, &mut rng);
+                let price = s.price().expect("a shop ticket");
+                assert!(price <= worth(level), "level {level}: {s:?} is over its worth");
+                assert!(levels::shop_level(s) <= level, "level {level}: {s:?} is not open yet");
+                assert_ne!(s, Series::PotTicket);
+            }
+        }
+        let means: Vec<f64> = [1, 3, 5, 10, 20, 30].iter().map(|l| mean(*l, &mut rng)).collect();
+        assert!(means.windows(2).all(|w| w[0] <= w[1]), "worth rises with the level: {means:?}");
+        assert_eq!(means[0], 35.0, "level 1: always the Lucky Three");
+        assert!(means[5] >= 150.0, "{means:?}");
+        assert_eq!(worth(1), 35);
+        assert_eq!(worth(100), 300, "capped");
+    }
+
+    #[test]
     fn taking_an_empty_pocket() {
-        let (n, new_at) = take(0, t0(), t0() + Duration::minutes(30));
+        let (n, new_at) = take(0, t0(), t0() + REFILL / 2);
         assert_eq!((n, new_at), (0, t0()));
     }
 }

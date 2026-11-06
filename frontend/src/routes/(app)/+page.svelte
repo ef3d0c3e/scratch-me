@@ -199,6 +199,7 @@
 					<span class="slot" class:full={i < me.pocket.count}></span>
 				{/each}
 			</div>
+			<p class="worth">{i18n.t('lobby.pocket_worth', { n: me.pocket_worth })}</p>
 			<p class="state">
 				{#if me.pocket.count > 0}
 					{i18n.t('lobby.pocket_ready', { n: me.pocket.count })}
@@ -267,7 +268,7 @@
 		</article>
 	</section>
 
-	<DuelsCard />
+	{#if !me.guest}<DuelsCard />{/if}
 	<PotCard {now} />
 	<QuestsCard />
 
@@ -296,6 +297,10 @@
 </div>
 
 <style>
+	.worth {
+		font-size: 12px;
+		color: var(--muted);
+	}
 	.guest {
 		display: flex;
 		align-items: center;
