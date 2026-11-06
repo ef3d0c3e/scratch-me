@@ -252,8 +252,11 @@ pub async fn scratch(
         })
         .await?;
     // Committed: now everyone may hear of it
+    let extra = if out.duplicate { DUPLICATE_COINS } else { 0 };
+    state.metrics.finished(&out.series, &out.prize, extra);
+    state.metrics.issued(&out.tickets);
+    state.metrics.progress(&out.progress);
     if let Some(series) = Series::parse(&out.series) {
-        let extra = if out.duplicate { DUPLICATE_COINS } else { 0 };
         let s = Scratch::of(series, &out.layout, &out.prize, extra);
         crate::live::broadcast(&state.live, &user.username, Some((series, &s, &out.prize)), &out.progress.achievements);
     }
@@ -396,6 +399,9 @@ async fn finish(
 
 /// Tells everyone about a finished ticket worth it, once committed
 fn announce(state: &AppState, user: &str, series: Series, done: &Scratched) {
+    state.metrics.finished(series.key(), &done.prize, 0);
+    state.metrics.issued(&done.tickets);
+    state.metrics.progress(&done.progress);
     let s = Scratch::of(series, &done.layout, &done.prize, 0);
     crate::live::broadcast(&state.live, user, Some((series, &s, &done.prize)), &done.progress.achievements);
 }

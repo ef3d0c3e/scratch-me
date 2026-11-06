@@ -200,6 +200,12 @@ impl Hub {
         self.online.lock().unwrap().contains_key(&uid)
     }
 
+    /// (open sockets, players with one open)
+    pub fn counts(&self) -> (usize, usize) {
+        let online = self.online.lock().unwrap();
+        (online.values().sum(), online.len())
+    }
+
     /// Players with a socket open
     pub fn online(&self) -> usize {
         self.online.lock().unwrap().len()

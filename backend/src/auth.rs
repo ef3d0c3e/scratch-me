@@ -195,6 +195,20 @@ pub async fn register(
     req: HttpRequest,
     body: web::Json<RegisterBody>,
 ) -> ApiResult<HttpResponse> {
+    let metrics = state.clone();
+    let r = register_inner(state, req, body).await;
+    metrics.metrics.auth("register", crate::metrics::auth_result(&r));
+    if r.is_ok() {
+        metrics.metrics.earned("start", STARTING_COINS);
+    }
+    r
+}
+
+async fn register_inner(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<RegisterBody>,
+) -> ApiResult<HttpResponse> {
     let RegisterBody { username, email, password, tz } = body.into_inner();
     let (username, email) = (username.trim().to_owned(), email.trim().to_owned());
     // Every sign-up comes with coins: a few per address, then one every 10 minutes
@@ -257,6 +271,20 @@ pub async fn guest(
     req: HttpRequest,
     body: web::Json<GuestBody>,
 ) -> ApiResult<HttpResponse> {
+    let metrics = state.clone();
+    let r = guest_inner(state, req, body).await;
+    metrics.metrics.auth("guest", crate::metrics::auth_result(&r));
+    if r.is_ok() {
+        metrics.metrics.earned("start", STARTING_COINS);
+    }
+    r
+}
+
+async fn guest_inner(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<GuestBody>,
+) -> ApiResult<HttpResponse> {
     let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
     if let Some(wait) = state.limits.register_ip.wait(&ip) {
         return Err(ApiError::RetryAfter(wait));
@@ -306,6 +334,17 @@ pub async fn claim(
     user: CurrentUser,
     body: web::Json<RegisterBody>,
 ) -> ApiResult<HttpResponse> {
+    let metrics = state.clone();
+    let r = claim_inner(state, user, body).await;
+    metrics.metrics.auth("claim", crate::metrics::auth_result(&r));
+    r
+}
+
+async fn claim_inner(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    body: web::Json<RegisterBody>,
+) -> ApiResult<HttpResponse> {
     if !user.is_guest {
         return Err(ApiError::Conflict("not_a_guest"));
     }
@@ -346,19 +385,30 @@ pub async fn login(
     req: HttpRequest,
     body: web::Json<LoginBody>,
 ) -> ApiResult<HttpResponse> {
-    let LoginBody { login, password } = body.into_inner();
-    let login = login.trim().to_lowercase();
+    let metrics = state.clone();
+    let r = login_inner(state, req, body).await;
+    metrics.metrics.auth("login", crate::metrics::auth_result(&r));
+    r
+}
+
+async fn login_inner(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<LoginBody>,
+) -> ApiResult<HttpResponse> {
+    let LoginBody { login: given, password } = body.into_inner();
+    let given = given.trim().to_lowercase();
     // Only failures cost: per account against guessing one password, per
     // address against sweeping many accounts
     let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
     let limits = &state.limits;
-    let wait = [limits.login_account.wait(&login), limits.login_ip.wait(&ip)].into_iter().flatten().max();
+    let wait = [limits.login_account.wait(&given), limits.login_ip.wait(&ip)].into_iter().flatten().max();
     if let Some(wait) = wait {
         tracing::warn!(client = %ip, "login rate limited");
         return Err(ApiError::RetryAfter(wait));
     }
     let failed = || {
-        limits.login_account.hit(&login);
+        limits.login_account.hit(&given);
         limits.login_ip.hit(&ip);
         // The address the limits count: behind a proxy, check it is the player's
         tracing::info!(client = %ip, "login failed");
@@ -366,7 +416,7 @@ pub async fn login(
     };
     let mut conn = state.pool.get().await?;
     let found: Option<(i64, String)> = users::table
-        .filter(lower(users::username).eq(&login).or(lower(users::email.assume_not_null()).eq(&login)))
+        .filter(lower(users::username).eq(&given).or(lower(users::email.assume_not_null()).eq(&given)))
         .filter(users::password_hash.is_not_null())
         .select((users::id, users::password_hash.assume_not_null()))
         .first(&mut conn)

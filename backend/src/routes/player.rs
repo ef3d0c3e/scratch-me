@@ -167,6 +167,9 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
             Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now), progress })
         })
         .await?;
+    state.metrics.pocket_claim();
+    state.metrics.issued(&out.tickets);
+    state.metrics.progress(&out.progress);
     crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     Ok(web::Json(out))
 }
@@ -220,6 +223,9 @@ pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> Ap
             Ok::<_, ApiError>(EnvelopeClaim { day, contents, coins: progress.coins, tickets, progress })
         })
         .await?;
+    state.metrics.envelope_open(out.contents.coins);
+    state.metrics.issued(&out.tickets);
+    state.metrics.progress(&out.progress);
     crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     Ok(web::Json(out))
 }

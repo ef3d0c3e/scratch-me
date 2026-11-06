@@ -16,6 +16,9 @@ use crate::schema::{duels, users};
 use crate::tickets::duel::{self, STAKE};
 use crate::tickets::{Series, Source};
 
+/// What an expired challenge gives back
+pub const STAKE_REFUND: i64 = STAKE;
+
 /// An open challenge lapses after this long, and its stake comes back
 pub const EXPIRES: Duration = Duration::hours(24);
 
@@ -114,6 +117,8 @@ pub async fn challenge(
             Ok::<_, ApiError>((id, oid))
         })
         .await?;
+    state.metrics.spent("duel_stake", STAKE);
+    state.metrics.duel("open");
     state.live.notify(oid, Live::Duel { id, from: user.username.clone(), status: "open".into() });
     Ok(web::Json(dto(&mut conn, id).await?))
 }
@@ -156,7 +161,7 @@ pub async fn answer(
     let action = body.into_inner().action;
     let uid = user.id;
     let mut conn = state.pool.get().await?;
-    let (other, status) = conn
+    let (other, status, stake, tickets) = conn
         .transaction(async move |conn| {
             let row: Option<(i64, i64, i64)> = duels::table
                 .find(id)
@@ -176,13 +181,15 @@ pub async fn answer(
                     let (cn, on) = (name_of(conn, c).await?, name_of(conn, o).await?);
                     let (a, b) = duel::roll(&mut rand::rng());
                     let winner = if a.iter().sum::<u8>() > b.iter().sum::<u8>() { c } else { o };
-                    issue_drawn(conn, c, Series::Duel, Source::Duel, duel::ticket(&on, &a, &b)).await?;
-                    issue_drawn(conn, o, Series::Duel, Source::Duel, duel::ticket(&cn, &b, &a)).await?;
+                    let tickets = vec![
+                        issue_drawn(conn, c, Series::Duel, Source::Duel, duel::ticket(&on, &a, &b)).await?,
+                        issue_drawn(conn, o, Series::Duel, Source::Duel, duel::ticket(&cn, &b, &a)).await?,
+                    ];
                     diesel::update(duels::table.find(id))
                         .set((duels::status.eq("accepted"), duels::decided_at.eq(now), duels::winner_id.eq(winner)))
                         .execute(conn)
                         .await?;
-                    Ok((c, "accepted"))
+                    Ok((c, "accepted", stake, tickets))
                 }
                 ("decline", _, true) | ("cancel", true, _) => {
                     pay(conn, c, stake).await?;
@@ -191,12 +198,20 @@ pub async fn answer(
                         .set((duels::status.eq(status), duels::decided_at.eq(now)))
                         .execute(conn)
                         .await?;
-                    Ok((if uid == c { o } else { c }, status))
+                    Ok((if uid == c { o } else { c }, status, stake, vec![]))
                 }
                 _ => Err(ApiError::Invalid("not_your_duel")),
             }
         })
         .await?;
+    let m = &state.metrics;
+    m.duel(status);
+    if status == "accepted" {
+        m.spent("duel_stake", stake);
+        m.issued(&tickets);
+    } else {
+        m.earned("refund", stake);
+    }
     state.live.notify(other, Live::Duel { id, from: user.username.clone(), status: status.into() });
     Ok(web::Json(dto(&mut conn, id).await?))
 }

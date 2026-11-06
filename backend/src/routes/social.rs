@@ -195,6 +195,8 @@ pub async fn post_shout(
             Ok(Shouted { shout: ChatEvent { id, user: name, level, title, body: text, at }, progress })
         })
         .await?;
+    state.metrics.shout();
+    state.metrics.progress(&out.progress);
     state.live.chat(out.shout.clone());
     crate::live::broadcast(&state.live, &user.username, None, &out.progress.achievements);
     Ok(HttpResponse::Created().json(out))

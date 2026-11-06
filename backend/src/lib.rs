@@ -5,6 +5,7 @@ pub mod db;
 pub mod envelope;
 pub mod error;
 pub mod live;
+pub mod metrics;
 pub mod pocket;
 pub mod progress;
 pub mod ratelimit;
@@ -24,6 +25,7 @@ pub struct AppState {
     pub live: live::Hub,
     pub limits: ratelimit::AuthLimits,
     pub config: Arc<Config>,
+    pub metrics: metrics::Metrics,
 }
 
 /// Makes a player an admin; false when there is no such player
@@ -44,13 +46,17 @@ pub async fn chores(state: &AppState) -> anyhow::Result<()> {
     let mut conn = state.pool.get().await?;
     for (user, amount) in routes::pot::draw_due(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))? {
         tracing::info!(%user, amount, "pot won");
+        state.metrics.pot_won(amount);
         state.live.pot(&user, amount);
     }
     let gone = auth::forget_lost_guests(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     if gone > 0 {
         tracing::info!(gone, "lost guests forgotten");
+        state.metrics.guests_forgotten(gone);
     }
     for (challenger, id) in routes::duels::expire_due(&mut conn).await.map_err(|e| anyhow::anyhow!("{e}"))? {
+        state.metrics.duel("expired");
+        state.metrics.earned("refund", routes::duels::STAKE_REFUND);
         state.live.notify(challenger, live::Event::Duel { id, from: String::new(), status: "expired".into() });
     }
     Ok(())

@@ -33,6 +33,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 tracing = "0.1"
 tracing-actix-web = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+prometheus-client = "0.25"
 
 [dev-dependencies]
 actix-http = "3"

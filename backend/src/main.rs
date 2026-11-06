@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpServer, middleware, web};
 use anyhow::Context;
-use scratchme_api::{AppState, Config, db, routes};
+use scratchme_api::{AppState, Config, db, metrics, routes};
 use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
@@ -35,7 +35,26 @@ async fn main() -> anyhow::Result<()> {
     } else {
         Default::default()
     };
-    let state = web::Data::new(AppState { pool, live: Default::default(), limits, config: Arc::new(config) });
+    let state = web::Data::new(AppState {
+        pool,
+        live: Default::default(),
+        limits,
+        config: Arc::new(config),
+        metrics: Default::default(),
+    });
+    // Prometheus scrapes its own listener, never the public one
+    let scraper = match state.config.metrics_bind.clone() {
+        Some(addr) => {
+            let state = state.clone();
+            tracing::info!("metrics on http://{addr}/metrics");
+            let server = HttpServer::new(move || App::new().app_data(state.clone()).service(metrics::scrape))
+                .workers(1)
+                .bind(addr)?
+                .run();
+            Some(actix_web::rt::spawn(server))
+        }
+        None => None,
+    };
     // Pots to draw and duels to expire, once a minute
     let chores = state.clone();
     actix_web::rt::spawn(async move {
@@ -52,11 +71,15 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .app_data(state.clone())
             .wrap(middleware::Compress::default())
+            .wrap(middleware::from_fn(metrics::track))
             .wrap(tracing_actix_web::TracingLogger::default())
             .configure(routes::configure)
     })
     .bind(bind)?
     .run()
     .await?;
+    if let Some(scraper) = scraper {
+        scraper.abort();
+    }
     Ok(())
 }

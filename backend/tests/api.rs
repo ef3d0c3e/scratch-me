@@ -21,13 +21,20 @@ async fn state() -> Option<web::Data<AppState>> {
     // Tests run in parallel: migrate once per process
     static MIGRATED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
     MIGRATED.get_or_init(|| async { db::run_migrations(&url).await.unwrap() }).await;
-    let config =
-        Config { database_url: url.clone(), bind: String::new(), secure_cookies: false, trusted_proxies: vec![] };
+    let config = Config {
+        database_url: url.clone(),
+        bind: String::new(),
+        secure_cookies: false,
+        trusted_proxies: vec![],
+        metrics_bind: None,
+        metrics_token: None,
+    };
     Some(web::Data::new(AppState {
         pool: db::pool(&url).unwrap(),
         live: Default::default(),
         limits: scratchme_api::ratelimit::AuthLimits::relaxed(),
         config: Arc::new(config),
+        metrics: Default::default(),
     }))
 }
 
@@ -1304,4 +1311,74 @@ async fn leaderboard_ranks_members_by_coins_and_level() {
     let (status, board) = get(&app, "/api/leaderboard?by=level", &g).await;
     assert_eq!((status, &board["me"]), (200, &Value::Null));
     assert_eq!(get(&app, "/api/leaderboard?by=gold", &g).await.0, 400);
+}
+
+#[actix_web::test]
+async fn metrics_count_what_players_do_behind_a_token() {
+    let Some(state) = state().await else { return };
+    // The same state, with a token on the scrape
+    let config = Config { metrics_token: Some("s3cret".into()), ..(*state.config).clone() };
+    let state = web::Data::new(AppState {
+        pool: db::pool(&config.database_url).unwrap(),
+        live: Default::default(),
+        limits: scratchme_api::ratelimit::AuthLimits::relaxed(),
+        config: Arc::new(config),
+        metrics: Default::default(),
+    });
+    let app = test::init_service(
+        App::new()
+            .app_data(state.clone())
+            .wrap(actix_web::middleware::from_fn(scratchme_api::metrics::track))
+            .configure(routes::configure),
+    )
+    .await;
+    let scraper = test::init_service(App::new().app_data(state.clone()).service(scratchme_api::metrics::scrape)).await;
+    let scrape = |token: Option<&'static str>| {
+        let mut req = test::TestRequest::get().uri("/metrics");
+        if let Some(t) = token {
+            req = req.insert_header(("authorization", format!("Bearer {t}")));
+        }
+        test::call_service(&scraper, req.to_request())
+    };
+
+    let name = unique("metered");
+    let me = register(&app, &name, "UTC").await;
+    post(&app, "/api/pocket/claim", &me).await;
+    let won = known_ticket(
+        &name,
+        "lucky_three",
+        json!({ "cells": vec!["coin"; 9], "win": "coin" }),
+        json!({ "kind": "coins", "amount": 75 }),
+    )
+    .await;
+    post(&app, &format!("/api/tickets/{won}/scratch"), &me).await;
+    post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "lucky_three" })).await;
+    let req = test::TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "login": name, "password": "wrong-password" }))
+        .to_request();
+    test::call_service(&app, req).await;
+
+    assert_eq!(scrape(None).await.status(), 401);
+    assert_eq!(scrape(Some("nope")).await.status(), 401);
+    let res = scrape(Some("s3cret")).await;
+    assert_eq!(res.status(), 200);
+    let text = String::from_utf8(test::read_body(res).await.to_vec()).unwrap();
+    for line in [
+        r#"scratchme_auth_attempts_total{action="register",result="ok"} 1"#,
+        r#"scratchme_auth_attempts_total{action="login",result="failed"} 1"#,
+        r#"scratchme_coins_earned_total{reason="start"} 500"#,
+        "scratchme_pocket_claims_total 1",
+        r#"scratchme_tickets_issued_total{series="lucky_three",source="pocket"} 3"#,
+        r#"scratchme_tickets_issued_total{series="lucky_three",source="shop"} 1"#,
+        r#"scratchme_tickets_finished_total{series="lucky_three",result="win"} 1"#,
+        r#"scratchme_ticket_prize_coins_total{series="lucky_three"} 75"#,
+        r#"scratchme_coins_spent_total{reason="ticket"} 35"#,
+        r#"scratchme_http_requests_total{method="POST",route="/api/tickets/{id}/scratch",status="200"} 1"#,
+    ] {
+        assert!(text.contains(line), "missing {line}\n{text}");
+    }
+    assert!(text.contains(r#"scratchme_players{kind="member"}"#));
+    assert!(text.contains(r#"scratchme_players{kind="guest"}"#));
+    assert!(text.contains("scratchme_db_pool_connections"));
 }

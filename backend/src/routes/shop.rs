@@ -170,6 +170,25 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
         })
         .await?;
     let (out, gift) = out;
+    // Committed: counted
+    let m = &state.metrics;
+    match (&out.item, &gift) {
+        (Some(item), _) => m.cosmetic(item.kind(), price),
+        (None, Some((_, ticket))) => {
+            m.spent("gift", price);
+            m.gift();
+            m.issued(std::slice::from_ref(ticket));
+        }
+        (None, None) => {
+            m.spent("ticket", price);
+            m.issued(out.ticket.as_slice());
+        }
+    }
+    let ticket = gift.as_ref().map(|(_, t)| t).or(out.ticket.as_ref());
+    if ticket.is_some_and(|t| t.series == Series::PotTicket.key()) {
+        m.pot_entry();
+    }
+    m.progress(&out.progress);
     crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     // Committed: the receiver hears of it
     if let Some((rid, ticket)) = gift {

@@ -46,3 +46,39 @@ cargo run -p scratchme-api -- make-admin <username>
 - Celebrations scaled to the prize, scratch sound and haptics, tilt shimmer
 - Levels, daily quests, achievements
 - Shoutbox and live feed of big wins over a WebSocket, announcements, profiles and titles
+
+## Metrics
+
+Prometheus and Grafana run elsewhere (on the production server, the ones AnyCardz already uses); the API only exposes metrics. They are served on their own listener, `SCRATCHME_METRICS_BIND` (`GET /metrics`, OpenMetrics text), never through the public site, and only when it is set. When `SCRATCHME_METRICS_TOKEN` is set, scrapes must send `Authorization: Bearer <token>`.
+
+Next to AnyCardz (which has 9100), use `SCRATCHME_METRICS_BIND=127.0.0.1:9101`: only the host reaches it.
+
+- `deploy/prometheus/scrape.yml`: the `scratchme` job to add to that Prometheus
+- `deploy/grafana/scratchme.json`: the dashboard (Dashboards → Import, pick the Prometheus data source): traffic, latency, sign-ups and guests, tickets and their payout per series, coins in and out (net coin flow shows inflation), drops, progression, social and the DB pool
+
+Check a scrape with `curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9101/metrics | head`; in Prometheus, Status → Targets shows the `scratchme` job up.
+
+Every metric is prefixed `scratchme_`. Counters are counted once the action's transaction has committed.
+
+| Metric | Labels | What it counts |
+| --- | --- | --- |
+| `http_requests_total` | method, route, status | Requests answered, by route pattern (`unmatched` for unknown paths) |
+| `http_request_duration_seconds` | method, route | Time to answer (the live socket left out) |
+| `auth_attempts_total` | action (login, register, guest, claim), result (ok, failed, limited) | Logins, sign-ups, guests, guests signing up |
+| `tickets_issued_total` | series, source | Tickets given: pocket, envelope, prize, shop, reward, gift, duel |
+| `tickets_finished_total` | series, result (win, lose) | Tickets scratched or played to the end |
+| `ticket_prize_coins_total` | series | Coins tickets paid: divided by tickets finished, the payout per ticket |
+| `coins_earned_total` | reason (start, prize, reward, envelope, pot, refund) | Coins entering balances |
+| `coins_spent_total` | reason (ticket, gift, cosmetic, duel_stake) | Coins leaving balances |
+| `pocket_claims_total`, `envelope_opens_total` | | Free drops taken |
+| `quests_done_total` | key (quest, or bonus) | Daily quests finished |
+| `achievements_total` | key | Achievements earned |
+| `level_ups_total` | | Levels reached |
+| `cosmetics_bought_total` | kind | Themes, tools, foils bought |
+| `shouts_total`, `gifts_total` | | Shoutbox messages, tickets sent to others |
+| `duels_total` | status (open, accepted, declined, cancelled, expired) | Duels |
+| `pot_entries_total`, `pots_won_total` | | Daily pot entries, pots drawn with a winner |
+| `guests_forgotten_total` | | Guest accounts deleted once no session could reach them |
+| `live_sockets`, `online_users` | | Open live sockets, players with one (gauges) |
+| `players` | kind (member, guest) | Accounts (gauge) |
+| `db_pool_connections`, `db_pool_available`, `db_pool_waiting` | | Database pool (gauges) |
