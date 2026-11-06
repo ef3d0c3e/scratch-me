@@ -109,7 +109,11 @@ test('Treasure Dig: the player chooses, the map adds a dig, the rest shows at th
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
 	await expect(sheet.locator('[data-cell="0"]')).toHaveAttribute('data-spot', 'chest');
 
-	for (const cell of [1, 2, 3]) await digAt(page, cell);
+	// One at a time: each dig answered (its spot shown) before the next, as a player would
+	for (const cell of [1, 2, 3]) {
+		await digAt(page, cell);
+		await expect(sheet.locator(`[data-cell="${cell}"]`)).toHaveAttribute('data-spot', /.+/);
+	}
 	await expect(sheet.locator('[data-tier]')).toHaveText('+400 coins!');
 	await expect(sheet.getByTestId('digs-left')).toHaveText('All dug! Here is what was hidden');
 	// The 3,000 chest missed, now in view
