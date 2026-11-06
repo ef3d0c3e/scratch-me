@@ -40,6 +40,8 @@
 		theme?: ThemeId;
 		/** The ticket is spent: called once, when the prize shows or the sheet closes */
 		onresult: (r: Scratched) => void;
+		/** The ticket was already scratched or is gone (another tab, another device) */
+		ongone?: (id: number) => void;
 		onnext: () => void;
 		onclose: () => void;
 	}
@@ -49,6 +51,7 @@
 		tool = 'coin',
 		theme = 'midnight',
 		onresult,
+		ongone,
 		onnext,
 		onclose
 	}: Props = $props();
@@ -68,7 +71,14 @@
 	onMount(() => {
 		post<Scratched>(`/tickets/${ticket.id}/scratch`)
 			.then((r) => (result = r))
-			.catch((e) => (error = i18n.error(e)));
+			.catch((e) => {
+				const code = (e as { code?: string })?.code;
+				// Out of date: the stack held a ticket that is no longer there to scratch
+				if (code === 'already_scratched' || code === 'ticket') {
+					ongone?.(ticket.id);
+					error = i18n.t('scratch.gone');
+				} else error = i18n.error(e);
+			});
 		// The page behind must not scroll while scratching
 		const overflow = document.body.style.overflow;
 		document.body.style.overflow = 'hidden';

@@ -58,6 +58,8 @@ export default {
 	'source.prize': 'Won',
 
 	'scratch.foil': 'SCRATCH',
+	'scratch.gone':
+		'This ticket was already scratched, maybe in another tab. Its prize is in your wallet.',
 	'scratch.hint': 'Scratch with your finger',
 	'scratch.reveal_all': 'Reveal all',
 	'scratch.close': 'Close',

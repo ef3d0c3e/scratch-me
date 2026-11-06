@@ -56,3 +56,35 @@ test('a tool in use shows under the finger while scratching', async ({ page }) =
 	await page.mouse.up();
 	await expect(page.locator('.pen')).toHaveCount(0);
 });
+
+test('a bought ticket, once scratched, is no longer offered to scratch', async ({ page }) => {
+	await newPlayer(page);
+	await visit(page, '/shop');
+	await page.getByRole('button', { name: 'Buy Lucky Three' }).click();
+	await page.getByRole('button', { name: 'Scratch it now' }).click();
+	const sheet = page.getByRole('dialog');
+	await sheet.getByRole('button', { name: 'Reveal all' }).click();
+	await sheet
+		.getByRole('button', { name: /Back to the lobby|Next ticket/ })
+		.first()
+		.waitFor();
+	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
+	await expect(page.getByRole('button', { name: 'Scratch it now' })).toHaveCount(0);
+});
+
+test('a ticket scratched in another tab is dropped, not an error', async ({ page, context }) => {
+	await newPlayer(page);
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
+	await expect(page.getByText('3 tickets to scratch')).toBeVisible();
+	// Another tab scratches the first ticket behind this one's back
+	const me = await (await page.request.get('/api/me')).json();
+	const other = await context.newPage();
+	await other.request.post(`/api/tickets/${me.tickets[0].id}/scratch`, { data: {} });
+	await other.close();
+
+	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.getByRole('alert')).toContainText('already scratched');
+	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
+	await expect(page.getByText('2 tickets to scratch')).toBeVisible();
+});

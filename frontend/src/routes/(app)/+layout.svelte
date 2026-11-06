@@ -90,6 +90,7 @@
 			tool={session.me.tool}
 			theme={session.me.theme}
 			onresult={(r) => session.spent(r)}
+			ongone={(id) => session.forget(id)}
 			onnext={() => session.scratch()}
 			onclose={() => session.scratch(null)}
 		/>

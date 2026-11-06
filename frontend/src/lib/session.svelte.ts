@@ -72,6 +72,12 @@ export class Session {
 		if (r.prize.kind === 'pocket_refill') void this.refresh().catch(() => {});
 	}
 
+	/** A ticket the stack still showed but that is gone: out, and the rest refreshed */
+	forget(id: number) {
+		this.me.tickets = this.me.tickets.filter((t) => t.id !== id);
+		void this.refresh().catch(() => {});
+	}
+
 	/** Opens the next ticket in the stack, or a given one */
 	scratch(ticket: TicketDto | null = this.me.tickets[0] ?? null) {
 		this.open = ticket;

@@ -60,6 +60,8 @@ export default {
 	'source.prize': 'Gagné',
 
 	'scratch.foil': 'GRATTEZ',
+	'scratch.gone':
+		'Ce ticket a déjà été gratté, peut-être dans un autre onglet. Son lot est dans votre porte-monnaie.',
 	'scratch.hint': 'Grattez avec le doigt',
 	'scratch.reveal_all': 'Tout découvrir',
 	'scratch.close': 'Fermer',

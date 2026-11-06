@@ -15,6 +15,10 @@
 	let error = $state('');
 	/** The ticket just bought, offered to scratch at once */
 	let bought = $state<TicketDto | null>(null);
+	/** Offered only while it is still unscratched in the stack */
+	const fresh = $derived(
+		bought && session.me.tickets.some((t) => t.id === bought?.id) ? bought : null
+	);
 	let notice = $state('');
 
 	const THEMES: Cosmetic[] = (['midnight', 'sunset', 'mint', 'neon', 'royal'] as const).map(
@@ -87,10 +91,10 @@
 	<div class="status" aria-live="polite">
 		{#if error}
 			<p class="err" role="alert">{error}</p>
-		{:else if bought}
+		{:else if fresh}
 			<div class="bought">
-				<p>{i18n.t('shop.bought', { name: i18n.t(`series.${bought.series}`) })}</p>
-				<button type="button" class="btn primary small" onclick={() => session.scratch(bought)}
+				<p>{i18n.t('shop.bought', { name: i18n.t(`series.${fresh.series}`) })}</p>
+				<button type="button" class="btn primary small" onclick={() => session.scratch(fresh)}
 					>{i18n.t('shop.scratch_now')}</button
 				>
 			</div>
