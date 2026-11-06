@@ -45,8 +45,19 @@ pub fn reward(level: i32) -> Prize {
 /// The level a series needs in the shop
 pub fn shop_level(series: Series) -> i32 {
     match series {
-        Series::HighCard | Series::LuckyReels | Series::LuckyDice | Series::PushLuck => 2,
-        Series::NumberMatch | Series::Derby | Series::Rocket => 3,
+        Series::HighCard
+        | Series::LuckyReels
+        | Series::LuckyDice
+        | Series::PushLuck
+        | Series::Battleship
+        | Series::HotSpot
+        | Series::WordBank => 2,
+        Series::NumberMatch
+        | Series::Derby
+        | Series::Rocket
+        | Series::Blackjack
+        | Series::Fishing
+        | Series::WordSearch => 3,
         Series::Bingo | Series::MysteryBoxes | Series::DefuseBomb => 4,
         Series::CashWheel | Series::Plinko | Series::SafeCracker => 5,
         Series::TreasureDig => 6,

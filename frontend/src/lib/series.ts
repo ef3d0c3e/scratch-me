@@ -19,7 +19,14 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	safe_cracker: { edge: '#64748b', ink: '#334155', shadow: '#0f172a' },
 	mystery_boxes: { edge: '#8b5cf6', ink: '#6d28d9', shadow: '#2e1065' },
 	defuse_bomb: { edge: '#ef4444', ink: '#b91c1c', shadow: '#450a0a' },
-	rocket: { edge: '#0ea5e9', ink: '#0369a1', shadow: '#082f49' }
+	rocket: { edge: '#0ea5e9', ink: '#0369a1', shadow: '#082f49' },
+	blackjack: { edge: '#15803d', ink: '#14532d', shadow: '#052e16' },
+	hot_spot: { edge: '#f43f5e', ink: '#be123c', shadow: '#4c0519' },
+	battleship: { edge: '#1d4ed8', ink: '#1e3a8a', shadow: '#0b1640' },
+	board_walk: { edge: '#eab308', ink: '#a16207', shadow: '#422006' },
+	fishing: { edge: '#06b6d4', ink: '#0e7490', shadow: '#083344' },
+	word_bank: { edge: '#84cc16', ink: '#4d7c0f', shadow: '#1a2e05' },
+	word_search: { edge: '#ec4899', ink: '#be185d', shadow: '#500724' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -42,7 +49,14 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	safe_cracker: { cols: 1, rows: 1 },
 	mystery_boxes: { cols: 1, rows: 1 },
 	defuse_bomb: { cols: 1, rows: 1 },
-	rocket: { cols: 1, rows: 1 }
+	rocket: { cols: 1, rows: 1 },
+	blackjack: { cols: 1, rows: 4 },
+	hot_spot: { cols: 5, rows: 4 },
+	battleship: { cols: 3, rows: 3 },
+	board_walk: { cols: 3, rows: 1 },
+	fishing: { cols: 4, rows: 1 },
+	word_bank: { cols: 6, rows: 2 },
+	word_search: { cols: 4, rows: 4 }
 };
 
 /** Series played move by move, not scratched all at once */

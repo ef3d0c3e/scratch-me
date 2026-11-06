@@ -909,3 +909,23 @@ async fn a_bonus_bundle_pays_coins_and_a_ticket() {
     assert_eq!(body["coins"], STARTING_COINS + 50);
     assert_eq!(body["tickets"][0]["series"], "lucky_three");
 }
+
+#[actix_web::test]
+async fn fish_go_into_the_aquarium() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("fish");
+    let me = register(&app, &name, "UTC").await;
+    let casts = json!({ "casts": [
+        { "fish": "tuna", "coins": 20 }, { "fish": null, "coins": 0 },
+        { "fish": "tuna", "coins": 20 }, { "fish": "golden_koi", "coins": 600 }
+    ] });
+    let id = known_ticket(&name, "fishing", casts, json!({ "kind": "coins", "amount": 640 })).await;
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!((status, body["coins"].as_i64()), (200, Some(STARTING_COINS + 640)));
+    let (_, aq) = get(&app, "/api/aquarium", &me).await;
+    assert_eq!(aq["species"].as_array().unwrap().len(), 12);
+    let mut caught: Vec<&str> = aq["caught"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    caught.sort();
+    assert_eq!(caught, ["golden_koi", "tuna"]);
+}

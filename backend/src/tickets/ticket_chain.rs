@@ -12,12 +12,18 @@ pub const PANELS: usize = 6;
 /// How many tickets a chain holds, and how often
 const COUNTS: [(usize, u32); 5] = [(0, 30), (1, 40), (2, 20), (3, 8), (4, 2)];
 /// Which series each one is
-pub const FOUND: [(Series, u32); 13] = [
-    (Series::LuckyThree, 300),
-    (Series::TicTacToe, 120),
-    (Series::LuckyDice, 100),
-    (Series::HighCard, 110),
-    (Series::LuckyReels, 100),
+pub const FOUND: [(Series, u32); 19] = [
+    (Series::LuckyThree, 260),
+    (Series::BoardWalk, 60),
+    (Series::Battleship, 50),
+    (Series::HotSpot, 50),
+    (Series::WordBank, 40),
+    (Series::Blackjack, 40),
+    (Series::Fishing, 30),
+    (Series::TicTacToe, 100),
+    (Series::LuckyDice, 80),
+    (Series::HighCard, 90),
+    (Series::LuckyReels, 80),
     (Series::NumberMatch, 80),
     (Series::Derby, 50),
     (Series::Plinko, 30),

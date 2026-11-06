@@ -21,7 +21,7 @@ use crate::auth::parse_tz;
 use crate::envelope;
 use crate::error::ApiResult;
 use crate::routes::tickets::{TicketDto, grant};
-use crate::schema::{achievements as earned, cosmetics, quests as quest_rows, stats, streaks, users};
+use crate::schema::{achievements as earned, aquarium, cosmetics, quests as quest_rows, stats, streaks, users};
 use crate::tickets::{Prize, Source};
 use achievements::{Goal, Metric};
 use levels::LevelDto;
@@ -217,6 +217,7 @@ pub async fn metric(conn: &mut AsyncPgConnection, uid: i64, m: Metric, level: i3
             streaks::table.find(uid).select(streaks::best).first::<i32>(conn).await.optional()?.unwrap_or(0) as i64
         }
         Metric::Cosmetics => cosmetics::table.filter(cosmetics::user_id.eq(uid)).count().get_result(conn).await?,
+        Metric::Species => aquarium::table.filter(aquarium::user_id.eq(uid)).count().get_result(conn).await?,
         Metric::Level => level as i64,
     })
 }

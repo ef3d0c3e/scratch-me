@@ -14,6 +14,8 @@ pub enum Metric {
     BestStreak,
     /// Themes and tools owned besides the defaults
     Cosmetics,
+    /// Fish species in the aquarium
+    Species,
     Level,
 }
 
@@ -66,6 +68,7 @@ pub fn all() -> Vec<Achievement> {
         a("streak_30", Reach(BestStreak, 30), Prize::Tickets { series: vec![Series::Golden, Series::Golden] }),
         a("quests_30", Reach(QuestsDone, 30), coins(500)),
         a("collector_5", Reach(Cosmetics, 5), coins(500)),
+        a("aquarium", Reach(Species, 12), Prize::Tickets { series: vec![Series::Golden, Series::Golden] }),
         a("deep_digger", At(DigAtLeast(1000)), cosmetic(Cosmetic::Tool(Tool::Shovel))),
         a("level_10", Reach(Level, 10), cosmetic(Cosmetic::Theme(Theme::Champion))),
     ]

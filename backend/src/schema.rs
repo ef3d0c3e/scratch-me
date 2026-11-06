@@ -9,6 +9,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    aquarium (user_id, species) {
+        user_id -> Int8,
+        species -> Text,
+        caught_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     announcements (id) {
         id -> Int8,
         author_id -> Nullable<Int8>,
@@ -128,6 +136,7 @@ diesel::table! {
 }
 
 diesel::joinable!(achievements -> users (user_id));
+diesel::joinable!(aquarium -> users (user_id));
 diesel::joinable!(cosmetics -> users (user_id));
 diesel::joinable!(quest_days -> users (user_id));
 diesel::joinable!(quests -> users (user_id));
@@ -140,6 +149,7 @@ diesel::joinable!(tickets -> users (user_id));
 diesel::allow_tables_to_appear_in_same_query!(
     achievements,
     announcements,
+    aquarium,
     cosmetics,
     mutes,
     quest_days,

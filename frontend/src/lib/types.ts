@@ -17,6 +17,13 @@ export type Series =
 	| 'mystery_boxes'
 	| 'defuse_bomb'
 	| 'rocket'
+	| 'blackjack'
+	| 'hot_spot'
+	| 'battleship'
+	| 'board_walk'
+	| 'fishing'
+	| 'word_bank'
+	| 'word_search'
 	| 'ticket_chain'
 	| 'golden';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
@@ -329,4 +336,42 @@ export interface DerbyLayout {
 export interface PlinkoLayout {
 	balls: { path: boolean[]; bin: number }[];
 	bins: number[];
+}
+
+export interface BlackjackLayout {
+	dealer: PlayingCard[];
+	hands: { cards: PlayingCard[]; coins: number; result: 'blackjack' | 'win' | 'push' | 'lose' }[];
+}
+
+export interface HotSpotLayout {
+	mine: number[];
+	drawn: number[];
+	matches: number;
+}
+
+export interface BattleshipLayout {
+	ships: { cells: number[]; coins: number; sunk: boolean }[];
+	shots: number[];
+	hits: number;
+}
+
+export interface BoardWalkLayout {
+	rolls: number[];
+	path: number[];
+	board: number[];
+}
+
+export interface FishingLayout {
+	casts: { fish: string | null; coins: number }[];
+}
+
+export interface WordBankLayout {
+	words: string[];
+	letters: string[];
+	complete: number[];
+}
+
+export interface WordSearchLayout {
+	grid: string[];
+	targets: { word: string; coins: number; at: number[] | null }[];
 }

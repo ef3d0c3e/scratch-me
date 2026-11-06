@@ -12,7 +12,7 @@ use crate::cosmetics::DUPLICATE_COINS;
 use crate::error::{ApiError, ApiResult};
 use crate::pocket;
 use crate::progress::{self, Event, Progress, Scratch};
-use crate::schema::{cosmetics, tickets, users};
+use crate::schema::{aquarium, cosmetics, tickets, users};
 use crate::tickets::play;
 use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
 use crate::tickets::{Prize, Series, Source};
@@ -210,6 +210,9 @@ pub async fn scratch(
             let prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
             let g = grant(conn, uid, &prize, Source::Prize).await?;
             let kind = Series::parse(&series).ok_or_else(|| ApiError::Internal(anyhow::anyhow!("series {series}")))?;
+            if kind == Series::Fishing {
+                record_catch(conn, uid, &layout).await?;
+            }
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
             let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra));
             let progress = progress::apply(conn, uid, &[event]).await?;
@@ -448,4 +451,36 @@ pub async fn play_move(
     body: web::Json<PlayBody>,
 ) -> ApiResult<web::Json<PlayState>> {
     Ok(web::Json(play_ticket(&state, &user, path.into_inner(), Some(body.into_inner().mv)).await?.1))
+}
+
+/// Puts the fish a Fishing ticket brought up into the player's aquarium
+async fn record_catch(conn: &mut AsyncPgConnection, uid: i64, layout: &serde_json::Value) -> ApiResult<()> {
+    let rows: Vec<_> = crate::tickets::fishing::caught(layout)
+        .into_iter()
+        .map(|s| (aquarium::user_id.eq(uid), aquarium::species.eq(s)))
+        .collect();
+    if !rows.is_empty() {
+        diesel::insert_into(aquarium::table).values(rows).on_conflict_do_nothing().execute(conn).await?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+pub struct Aquarium {
+    /// Every species, in order
+    pub species: Vec<&'static str>,
+    pub caught: Vec<String>,
+}
+
+#[get("/aquarium")]
+pub async fn get_aquarium(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<Aquarium>> {
+    let mut conn = state.pool.get().await?;
+    let caught = aquarium::table
+        .filter(aquarium::user_id.eq(user.id))
+        .order(aquarium::caught_at.asc())
+        .select(aquarium::species)
+        .load(&mut conn)
+        .await?;
+    let species = crate::tickets::fishing::SPECIES.iter().map(|(n, _, _)| *n).collect();
+    Ok(web::Json(Aquarium { species, caught }))
 }

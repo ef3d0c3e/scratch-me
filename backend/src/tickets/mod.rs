@@ -9,13 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::cosmetics::Cosmetic;
 
+pub mod battleship;
 pub mod bingo;
+pub mod blackjack;
+pub mod board_walk;
 pub mod bomb;
 pub mod bonus;
 pub mod cash_wheel;
 pub mod derby;
+pub mod fishing;
 pub mod golden;
 pub mod high_card;
+pub mod hot_spot;
 pub mod lucky_dice;
 pub mod lucky_reels;
 pub mod lucky_three;
@@ -29,6 +34,9 @@ pub mod safe_cracker;
 pub mod tic_tac_toe;
 pub mod ticket_chain;
 pub mod treasure_dig;
+pub mod word_bank;
+pub mod word_search;
+pub mod words;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -51,17 +59,31 @@ pub enum Series {
     MysteryBoxes,
     DefuseBomb,
     Rocket,
+    Blackjack,
+    HotSpot,
+    Battleship,
+    BoardWalk,
+    Fishing,
+    WordBank,
+    WordSearch,
 }
 
 impl Series {
-    pub const ALL: [Series; 18] = [
+    pub const ALL: [Series; 25] = [
         Series::LuckyThree,
+        Series::BoardWalk,
         Series::TicTacToe,
         Series::LuckyDice,
         Series::HighCard,
+        Series::HotSpot,
+        Series::Battleship,
+        Series::WordBank,
         Series::LuckyReels,
         Series::Bingo,
         Series::NumberMatch,
+        Series::Blackjack,
+        Series::Fishing,
+        Series::WordSearch,
         Series::Derby,
         Series::Plinko,
         Series::CashWheel,
@@ -96,6 +118,13 @@ impl Series {
             Series::MysteryBoxes => "mystery_boxes",
             Series::DefuseBomb => "defuse_bomb",
             Series::Rocket => "rocket",
+            Series::Blackjack => "blackjack",
+            Series::HotSpot => "hot_spot",
+            Series::Battleship => "battleship",
+            Series::BoardWalk => "board_walk",
+            Series::Fishing => "fishing",
+            Series::WordBank => "word_bank",
+            Series::WordSearch => "word_search",
         }
     }
 
@@ -122,6 +151,13 @@ impl Series {
             Series::MysteryBoxes => Some(mystery_boxes::PRICE),
             Series::DefuseBomb => Some(bomb::PRICE),
             Series::Rocket => Some(rocket::PRICE),
+            Series::Blackjack => Some(blackjack::PRICE),
+            Series::HotSpot => Some(hot_spot::PRICE),
+            Series::Battleship => Some(battleship::PRICE),
+            Series::BoardWalk => Some(board_walk::PRICE),
+            Series::Fishing => Some(fishing::PRICE),
+            Series::WordBank => Some(word_bank::PRICE),
+            Series::WordSearch => Some(word_search::PRICE),
             Series::TicketChain | Series::Golden => None,
         }
     }
@@ -152,6 +188,13 @@ impl Series {
             Series::MysteryBoxes => mystery_boxes::draw(rng),
             Series::DefuseBomb => bomb::draw(rng),
             Series::Rocket => rocket::draw(rng),
+            Series::Blackjack => blackjack::draw(rng),
+            Series::HotSpot => hot_spot::draw(rng),
+            Series::Battleship => battleship::draw(rng),
+            Series::BoardWalk => board_walk::draw(rng),
+            Series::Fishing => fishing::draw(rng),
+            Series::WordBank => word_bank::draw(rng),
+            Series::WordSearch => word_search::draw(rng),
         }
     }
 

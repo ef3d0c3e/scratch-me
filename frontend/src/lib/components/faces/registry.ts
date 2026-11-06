@@ -6,7 +6,14 @@
 
 import type { Component } from 'svelte';
 import type { Series } from '#lib/types.ts';
+import BattleshipFace from './BattleshipFace.svelte';
 import BingoFace from './BingoFace.svelte';
+import BlackjackFace from './BlackjackFace.svelte';
+import BoardWalkFace from './BoardWalkFace.svelte';
+import FishingFace from './FishingFace.svelte';
+import HotSpotFace from './HotSpotFace.svelte';
+import WordBankFace from './WordBankFace.svelte';
+import WordSearchFace from './WordSearchFace.svelte';
 import BoxesFace from './BoxesFace.svelte';
 import BombFace from './BombFace.svelte';
 import ChainFace from './ChainFace.svelte';
@@ -41,7 +48,14 @@ export const SCRATCH_FACES: Partial<Record<Series, Face>> = {
 	tic_tac_toe: TicTacToeFace,
 	lucky_dice: DiceFace,
 	derby: DerbyFace,
-	plinko: PlinkoFace
+	plinko: PlinkoFace,
+	blackjack: BlackjackFace,
+	hot_spot: HotSpotFace,
+	battleship: BattleshipFace,
+	board_walk: BoardWalkFace,
+	fishing: FishingFace,
+	word_bank: WordBankFace,
+	word_search: WordSearchFace
 };
 
 export const PLAYED_FACES: Partial<Record<Series, Face>> = {

@@ -33,6 +33,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(tickets::dig)
             .service(tickets::look)
             .service(tickets::play_move)
+            .service(tickets::get_aquarium)
             .service(shop::list)
             .service(shop::buy)
             .service(shop::equip)
