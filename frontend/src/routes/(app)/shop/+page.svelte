@@ -180,6 +180,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 18px;
+		/* Room for the message bar over the last offers */
+		padding-bottom: 72px;
 	}
 	h1 {
 		font-size: 26px;
@@ -192,8 +194,36 @@
 		color: var(--muted);
 		margin-top: 4px;
 	}
-	.status:empty {
-		display: none;
+	/* Messages float above the tab bar: the list never moves under the finger */
+	.status {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: calc(76px + var(--safe-bottom));
+		z-index: 15;
+		display: flex;
+		justify-content: center;
+		padding: 0 16px;
+		pointer-events: none;
+	}
+	.status > :global(*) {
+		pointer-events: auto;
+		width: min(448px, 100%);
+		animation: rise 0.25s ease both;
+	}
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+	}
+	.status .err,
+	.status .ok {
+		padding: 10px 14px;
+		border-radius: 14px;
+		background: var(--night-2);
+		border: 1px solid var(--line);
+		box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
 	}
 	.err {
 		color: var(--danger);
@@ -204,6 +234,7 @@
 		font-weight: 700;
 	}
 	.bought {
+		box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

@@ -88,3 +88,20 @@ test('a ticket scratched in another tab is dropped, not an error', async ({ page
 	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
 	await expect(page.getByText('2 tickets to scratch')).toBeVisible();
 });
+
+test('buying does not move the list: taps in a row hit the same button', async ({ page }) => {
+	await newPlayer(page);
+	await visit(page, '/shop');
+	const buy = page.getByRole('button', { name: 'Buy Lucky Three' });
+	const before = (await buy.boundingBox())!;
+	await buy.click();
+	await expect(page.getByText('Lucky Three is in your stack')).toBeVisible();
+	expect((await buy.boundingBox())!.y).toBe(before.y);
+	// Three quick taps where the button was: three tickets
+	for (let i = 0; i < 3; i++) {
+		await page.mouse.click(before.x + before.width / 2, before.y + before.height / 2);
+		await expect(page.getByTestId('coins')).toHaveText(String(500 - 35 * (i + 2)));
+	}
+	await visit(page, '/');
+	await expect(page.getByText('4 tickets to scratch')).toBeVisible();
+});
