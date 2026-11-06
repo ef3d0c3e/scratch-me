@@ -1,0 +1,37 @@
+[package]
+name = "scratchme-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "scratchme-api"
+path = "src/main.rs"
+
+[dependencies]
+actix-web = { version = "4", default-features = false, features = ["macros", "cookies", "compress-gzip"] }
+anyhow = "1"
+argon2 = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+chrono-tz = "0.10"
+diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "chrono", "serde_json", "with-deprecated"] }
+diesel-async = { version = "0.9", features = ["postgres", "deadpool", "migrations"] }
+diesel_migrations = "2.3"
+dotenvy = "0.15"
+hex = "0.4"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+tracing = "0.1"
+tracing-actix-web = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+actix-http = "3"

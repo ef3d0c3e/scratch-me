@@ -1,0 +1,3 @@
+ALTER TABLE users DROP COLUMN tool;
+ALTER TABLE users DROP COLUMN theme;
+DROP TABLE cosmetics;

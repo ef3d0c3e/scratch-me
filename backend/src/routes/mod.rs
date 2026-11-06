@@ -1,0 +1,34 @@
+use actix_web::{HttpResponse, get, web};
+
+use crate::auth;
+
+pub mod player;
+pub mod shop;
+pub mod tickets;
+
+#[get("/health")]
+async fn health() -> HttpResponse {
+    HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
+}
+
+/// Every route lives under /api
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/api")
+            .app_data(web::JsonConfig::default().limit(16 * 1024).error_handler(|err, _| {
+                tracing::debug!("bad json: {err}");
+                crate::error::ApiError::Invalid("invalid_body").into()
+            }))
+            .service(health)
+            .service(auth::register)
+            .service(auth::login)
+            .service(auth::logout)
+            .service(player::get_me)
+            .service(player::claim_pocket)
+            .service(player::claim_envelope)
+            .service(tickets::scratch)
+            .service(shop::list)
+            .service(shop::buy)
+            .service(shop::equip),
+    );
+}
