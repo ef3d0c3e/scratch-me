@@ -5,12 +5,17 @@
 	import type {
 		ChainLayout,
 		BingoLayout,
+		DerbyLayout,
+		DiceLayout,
+		PlinkoLayout,
+		TicTacToeLayout,
 		GoldenLayout,
 		HighCardLayout,
 		ReelsLayout,
 		LuckyLayout,
 		NumberLayout,
 		Scratched,
+		FoilId,
 		ThemeId,
 		TicketDto,
 		ToolId,
@@ -21,6 +26,10 @@
 	import { THEME_PITCH, TOOLS } from '#lib/fx/tools.ts';
 	import { FOIL_GRID, SERIES_LOOK, cosmeticKey, isDig } from '#lib/series.ts';
 	import BingoFace from './faces/BingoFace.svelte';
+	import DerbyFace from './faces/DerbyFace.svelte';
+	import DiceFace from './faces/DiceFace.svelte';
+	import PlinkoFace from './faces/PlinkoFace.svelte';
+	import TicTacToeFace from './faces/TicTacToeFace.svelte';
 	import HighCardFace from './faces/HighCardFace.svelte';
 	import ReelsFace from './faces/ReelsFace.svelte';
 	import TreasureFace from './faces/TreasureFace.svelte';
@@ -45,6 +54,7 @@
 		left: number;
 		tool?: ToolId;
 		theme?: ThemeId;
+		foil?: FoilId;
 		/** The ticket is spent: called once, when the prize shows or the sheet closes */
 		onresult: (r: Scratched) => void;
 		/** The ticket was already scratched or is gone (another tab, another device) */
@@ -56,6 +66,7 @@
 		ticket,
 		left,
 		tool = 'coin',
+		foil = 'silver',
 		theme = 'midnight',
 		onresult,
 		ongone,
@@ -164,10 +175,11 @@
 	});
 </script>
 
-{#snippet foil()}
+{#snippet cover()}
 	<ScratchFoil
 		{revealed}
 		{tool}
+		{foil}
 		onreveal={reveal}
 		onscratchstart={() => fx.unlock()}
 		onscratch={(speed) => fx.scratch(speed, voice.pitch, voice.q)}
@@ -209,28 +221,28 @@
 			<LuckyFace
 				layout={result?.layout as LuckyLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{:else if ticket.series === 'number_match'}
 			<NumberFace
 				layout={result?.layout as NumberLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{:else if ticket.series === 'ticket_chain'}
 			<ChainFace
 				layout={result?.layout as ChainLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{:else if ticket.series === 'cash_wheel'}
 			<WheelFace
 				layout={result?.layout as WheelLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 				ontick={() => fx.tick()}
 			/>
@@ -238,27 +250,57 @@
 			<HighCardFace
 				layout={result?.layout as HighCardLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{:else if ticket.series === 'lucky_reels'}
 			<ReelsFace
 				layout={result?.layout as ReelsLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{:else if ticket.series === 'bingo'}
 			<BingoFace
 				layout={result?.layout as BingoLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
+			/>
+		{:else if ticket.series === 'tic_tac_toe'}
+			<TicTacToeFace
+				layout={result?.layout as TicTacToeLayout | null}
+				{revealed}
+				foil={cover}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'lucky_dice'}
+			<DiceFace
+				layout={result?.layout as DiceLayout | null}
+				{revealed}
+				foil={cover}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'derby'}
+			<DerbyFace
+				layout={result?.layout as DerbyLayout | null}
+				{revealed}
+				foil={cover}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'plinko'}
+			<PlinkoFace
+				layout={result?.layout as PlinkoLayout | null}
+				{revealed}
+				foil={cover}
+				onsettled={settle}
+				ontick={() => fx.tick()}
 			/>
 		{:else if ticket.series === 'treasure_dig'}
 			<TreasureFace
 				{ticket}
 				{tool}
+				{foil}
 				ondone={dug}
 				onerror={(e) => (error = i18n.error(e))}
 				onscratchstart={() => fx.unlock()}
@@ -273,7 +315,7 @@
 			<GoldenFace
 				layout={result?.layout as GoldenLayout | null}
 				{revealed}
-				{foil}
+				foil={cover}
 				onsettled={settle}
 			/>
 		{/if}

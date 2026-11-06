@@ -41,6 +41,7 @@ export class Session {
 	owns(item: Cosmetic) {
 		if (item.kind === 'theme' && item.id === 'midnight') return true;
 		if (item.kind === 'tool' && item.id === 'coin') return true;
+		if (item.kind === 'foil' && item.id === 'silver') return true;
 		return this.me.owned.some((o) => o.kind === item.kind && o.id === item.id);
 	}
 

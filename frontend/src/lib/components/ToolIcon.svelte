@@ -31,6 +31,40 @@
 			<rect x="8" y="16" width="13" height="16" rx="4" fill="#57b8ff" />
 			<rect x="19" y="16" width="3" height="16" fill="#2a1650" opacity="0.2" />
 		</g>
+	{:else if tool === 'card'}
+		<g transform="rotate(-25 24 24)">
+			<rect x="6" y="12" width="36" height="24" rx="4" fill="#3651f5" />
+			<rect x="6" y="17" width="36" height="5" fill="#1b1530" />
+			<rect x="10" y="27" width="10" height="5" rx="1.5" fill="#ffc23d" />
+		</g>
+	{:else if tool === 'paw'}
+		<g fill="#e9c27d" stroke="#8a5a2b" stroke-width="2">
+			<ellipse cx="24" cy="31" rx="10" ry="8" />
+			<ellipse cx="12" cy="20" rx="4" ry="5" />
+			<ellipse cx="20" cy="13" rx="4" ry="5" />
+			<ellipse cx="29" cy="13" rx="4" ry="5" />
+			<ellipse cx="37" cy="20" rx="4" ry="5" />
+		</g>
+	{:else if tool === 'wand'}
+		<path d="M10 40L30 20" stroke="#2a1650" stroke-width="5" stroke-linecap="round" />
+		<path d="M10 40l4-4" stroke="#fff" stroke-width="5" stroke-linecap="round" />
+		<path
+			d="M34 6l2.6 6 6.4.6-4.9 4.2 1.5 6.3L34 20l-5.6 3.1 1.5-6.3L25 12.6l6.4-.6z"
+			fill="#ffd66b"
+			stroke="#c77d00"
+			stroke-width="1.5"
+		/>
+	{:else if tool === 'shovel'}
+		<g transform="rotate(-35 24 24)">
+			<rect x="22" y="2" width="4" height="24" rx="2" fill="#8a5a2b" />
+			<rect x="17" y="2" width="14" height="5" rx="2" fill="#8a5a2b" />
+			<path
+				d="M15 26h18v8c0 6-4 11-9 11s-9-5-9-11z"
+				fill="#b8c3cf"
+				stroke="#6b7785"
+				stroke-width="2"
+			/>
+		</g>
 	{:else}
 		<g transform="rotate(-40 24 24)">
 			<rect x="6" y="19" width="26" height="10" rx="4" fill="#2a1650" />

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { api, post } from '#lib/api.ts';
-	import type { DigState, Scratched, Spot, TicketDto, ToolId } from '#lib/types.ts';
+	import type { DigState, FoilId, Scratched, Spot, TicketDto, ToolId } from '#lib/types.ts';
 	import ScratchFoil from '../ScratchFoil.svelte';
 
 	/**
@@ -14,6 +14,7 @@
 	interface Props {
 		ticket: TicketDto;
 		tool: ToolId;
+		foil: FoilId;
 		/** The last dig's answer, as a scratch answers */
 		ondone: (r: Scratched) => void;
 		onerror: (e: unknown) => void;
@@ -22,8 +23,17 @@
 		onscratchend: () => void;
 		onfind: (spot: Spot) => void;
 	}
-	let { ticket, tool, ondone, onerror, onscratch, onscratchstart, onscratchend, onfind }: Props =
-		$props();
+	let {
+		ticket,
+		tool,
+		foil,
+		ondone,
+		onerror,
+		onscratch,
+		onscratchstart,
+		onscratchend,
+		onfind
+	}: Props = $props();
 	const i18n = getI18n();
 	const CELLS = 16;
 
@@ -102,6 +112,7 @@
 						<ScratchFoil
 							revealed={false}
 							{tool}
+							{foil}
 							shiny={false}
 							label="?"
 							onreveal={() => dig(i)}

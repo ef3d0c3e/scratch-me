@@ -31,7 +31,7 @@ test('a first win earns achievements and a level, announced', async ({ page }) =
 	await expect(page.locator('.stub')).toContainText('Reward');
 
 	await visit(page, '/trophies');
-	await expect(page.getByText('3 of 15 earned')).toBeVisible();
+	await expect(page.getByText(/^3 of \d+ earned$/)).toBeVisible();
 	await expect(page.locator('li[data-achievement="big_win"]')).toContainText('🏆');
 	await expect(page.locator('li[data-achievement="scratch_100"]')).toContainText('1 / 100');
 });

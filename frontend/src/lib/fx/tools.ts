@@ -41,6 +41,34 @@ export const TOOLS: Record<ToolId, ToolFeel> = {
 		glow: '#ff2b4e',
 		pitch: 2.2,
 		q: 6
+	},
+	card: {
+		brush: [24, 34],
+		flakes: ['#c9c4dc', '#e9e6f5', '#57b8ff'],
+		glow: null,
+		pitch: 1.2,
+		q: 1.2
+	},
+	paw: {
+		brush: [26, 38],
+		flakes: ['#e9c27d', '#c08a4a', '#fff4dc'],
+		glow: null,
+		pitch: 0.8,
+		q: 0.7
+	},
+	wand: {
+		brush: [18, 28],
+		flakes: ['#ffd66b', '#b28cff', '#fff6e5'],
+		glow: '#ffd66b',
+		pitch: 1.8,
+		q: 3
+	},
+	shovel: {
+		brush: [30, 44],
+		flakes: ['#c08a4a', '#8a5a2b', '#e9c27d'],
+		glow: null,
+		pitch: 0.5,
+		q: 0.5
 	}
 };
 
@@ -50,5 +78,10 @@ export const THEME_PITCH: Record<ThemeId, number> = {
 	sunset: 0.85,
 	mint: 1.1,
 	neon: 1.3,
-	royal: 0.9
+	royal: 0.9,
+	ocean: 0.95,
+	candy: 1.2,
+	arcade: 1.4,
+	forest: 0.8,
+	champion: 1
 };

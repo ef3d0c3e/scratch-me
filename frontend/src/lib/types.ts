@@ -8,13 +8,36 @@ export type Series =
 	| 'number_match'
 	| 'cash_wheel'
 	| 'treasure_dig'
+	| 'tic_tac_toe'
+	| 'lucky_dice'
+	| 'derby'
+	| 'plinko'
 	| 'ticket_chain'
 	| 'golden';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
 
-export type ThemeId = 'midnight' | 'sunset' | 'mint' | 'neon' | 'royal';
-export type ToolId = 'coin' | 'key' | 'eraser' | 'laser';
-export type Cosmetic = { kind: 'theme'; id: ThemeId } | { kind: 'tool'; id: ToolId };
+export type ThemeId =
+	| 'midnight'
+	| 'sunset'
+	| 'mint'
+	| 'ocean'
+	| 'candy'
+	| 'arcade'
+	| 'neon'
+	| 'royal'
+	| 'forest'
+	| 'champion';
+export type ToolId = 'coin' | 'card' | 'key' | 'eraser' | 'paw' | 'laser' | 'wand' | 'shovel';
+export type FoilId = 'silver' | 'carbon' | 'leopard' | 'gold' | 'holo' | 'galaxy';
+export type Cosmetic =
+	{ kind: 'theme'; id: ThemeId } | { kind: 'tool'; id: ToolId } | { kind: 'foil'; id: FoilId };
+
+/** Where a cosmetic comes from */
+export type Origin =
+	| { kind: 'default' }
+	| { kind: 'shop'; price: number }
+	| { kind: 'golden' }
+	| { kind: 'trophy'; achievement: string };
 
 export interface TicketDto {
 	id: number;
@@ -51,6 +74,7 @@ export interface MeDto {
 	envelope: EnvelopeDto;
 	theme: ThemeId;
 	tool: ToolId;
+	foil: FoilId;
 	/** Cosmetics owned besides the defaults */
 	owned: Cosmetic[];
 	level: LevelDto;
@@ -159,7 +183,7 @@ export interface Scratched {
 
 export interface ShopDto {
 	tickets: { series: Series; price: number; level: number }[];
-	cosmetics: { item: Cosmetic; price: number }[];
+	cosmetics: { item: Cosmetic; origin: Origin }[];
 }
 
 export interface Bought {
@@ -270,4 +294,24 @@ export interface DigState {
 	digs_left: number;
 	/** After the last dig: the whole beach and the prize */
 	done: Scratched | null;
+}
+
+export interface TicTacToeLayout {
+	games: { board: ('x' | 'o')[]; coins: number; won: boolean }[];
+}
+
+export interface DiceLayout {
+	dice: number[];
+	roll: 'sixes' | 'triple' | 'straight' | 'pair' | 'nothing';
+}
+
+export interface DerbyLayout {
+	bets: { horse: number; coins: number }[];
+	/** Horses in finishing order: the first one wins */
+	order: number[];
+}
+
+export interface PlinkoLayout {
+	balls: { path: boolean[]; bin: number }[];
+	bins: number[];
 }

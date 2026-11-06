@@ -89,6 +89,7 @@
 			{left}
 			tool={session.me.tool}
 			theme={session.me.theme}
+			foil={session.me.foil}
 			onresult={(r) => session.spent(r)}
 			ongone={(id) => session.forget(id)}
 			onnext={() => session.scratch()}

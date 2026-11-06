@@ -5,6 +5,17 @@ export function setCookie(name: string, value: string) {
 	document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${YEAR}; SameSite=Lax`;
 }
 
-export const THEMES: ThemeId[] = ['midnight', 'sunset', 'mint', 'neon', 'royal'];
+export const THEMES: ThemeId[] = [
+	'midnight',
+	'sunset',
+	'mint',
+	'ocean',
+	'candy',
+	'arcade',
+	'neon',
+	'royal',
+	'forest',
+	'champion'
+];
 export const parseSkin = (v: string | undefined): ThemeId =>
 	THEMES.find((t) => t === v) ?? 'midnight';

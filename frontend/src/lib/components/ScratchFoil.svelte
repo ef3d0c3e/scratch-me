@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { Coverage, brush, flakes, ready } from '#lib/scratch/foil.ts';
 	import { TOOLS } from '#lib/fx/tools.ts';
-	import type { ToolId } from '#lib/types.ts';
+	import { FOILS, type FoilLook } from '#lib/fx/foils.ts';
+	import type { FoilId, ToolId } from '#lib/types.ts';
 	import ToolIcon from './ToolIcon.svelte';
 	import {
 		IDLE_AFTER,
@@ -37,6 +38,8 @@
 		tool?: ToolId;
 		/** The moving shine; off for many small foils at once */
 		shiny?: boolean;
+		/** The foil worn: its colours and texture */
+		foil?: FoilId;
 		rows?: number;
 	}
 	let {
@@ -49,7 +52,8 @@
 		cols = 1,
 		rows = 1,
 		tool = 'coin',
-		shiny = true
+		shiny = true,
+		foil = 'silver'
 	}: Props = $props();
 
 	let wrap = $state<HTMLDivElement>();
@@ -207,20 +211,20 @@
 		if (!ctx) return;
 		ctx.globalCompositeOperation = 'source-over';
 		const g = ctx.createLinearGradient(0, 0, width, height);
-		// The theme's foil colours, from its CSS tokens
+		// The foil worn, else the theme's own foil colours from its CSS tokens
 		const css = getComputedStyle(wrap!);
 		const token = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
-		g.addColorStop(0, token('--foil-1', '#cfcbe0'));
-		g.addColorStop(0.45, token('--foil-2', '#a9a3c4'));
-		g.addColorStop(0.55, token('--foil-3', '#e9e6f5'));
-		g.addColorStop(1, token('--foil-4', '#8f89ad'));
+		const look = FOILS[foil];
+		const stops = look?.stops ?? [
+			token('--foil-1', '#cfcbe0'),
+			token('--foil-2', '#a9a3c4'),
+			token('--foil-3', '#e9e6f5'),
+			token('--foil-4', '#8f89ad')
+		];
+		[0, 0.45, 0.55, 1].forEach((at, i) => g.addColorStop(at, stops[i]));
 		ctx.fillStyle = g;
 		ctx.fillRect(0, 0, width, height);
-		// Brushed grain
-		for (let i = 0; i < width * height * 0.02; i++) {
-			ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.18)' : 'rgba(40,30,80,0.08)';
-			ctx.fillRect(Math.random() * width, Math.random() * height, 1.5, 1.5);
-		}
+		pattern(ctx, look?.pattern ?? 'grain');
 		// Words repeated on a slant
 		ctx.save();
 		ctx.translate(width / 2, height / 2);
@@ -228,7 +232,7 @@
 		ctx.font = `400 ${Math.round(width / 12)}px Bungee, 'Arial Black', sans-serif`;
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
-		ctx.fillStyle = token('--foil-ink', 'rgba(70, 55, 120, 0.22)');
+		ctx.fillStyle = look?.ink ?? token('--foil-ink', 'rgba(70, 55, 120, 0.22)');
 		const word = ctx.measureText(label).width + width / 8;
 		const row = width / 5;
 		for (let y = -height; y <= height; y += row) {
@@ -242,6 +246,74 @@
 		ctx.strokeStyle = 'rgba(255,255,255,0.5)';
 		ctx.lineWidth = 2;
 		ctx.strokeRect(4, 4, width - 8, height - 8);
+	}
+
+	/** The foil's texture, over its gradient */
+	function pattern(c: CanvasRenderingContext2D, kind: FoilLook['pattern']) {
+		const rnd = Math.random;
+		if (kind === 'grain') {
+			for (let i = 0; i < width * height * 0.02; i++) {
+				c.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.18)' : 'rgba(40,30,80,0.08)';
+				c.fillRect(rnd() * width, rnd() * height, 1.5, 1.5);
+			}
+		} else if (kind === 'weave') {
+			// Carbon fibre: little alternating tiles
+			const t = 8;
+			for (let y = 0; y < height; y += t)
+				for (let x = 0; x < width; x += t) {
+					const odd = (x / t + y / t) % 2 === 0;
+					const g = c.createLinearGradient(x, y, odd ? x + t : x, odd ? y : y + t);
+					g.addColorStop(0, 'rgba(255,255,255,0.10)');
+					g.addColorStop(1, 'rgba(0,0,0,0.25)');
+					c.fillStyle = g;
+					c.fillRect(x, y, t - 1, t - 1);
+				}
+		} else if (kind === 'spots') {
+			// Leopard: dark rings round a lighter middle
+			for (let i = 0; i < (width * height) / 900; i++) {
+				const x = rnd() * width;
+				const y = rnd() * height;
+				const r = 4 + rnd() * 6;
+				c.fillStyle = 'rgba(70, 40, 5, 0.55)';
+				c.beginPath();
+				c.ellipse(x, y, r, r * 0.8, rnd() * Math.PI, 0, Math.PI * 2);
+				c.fill();
+				c.fillStyle = 'rgba(200, 140, 50, 0.9)';
+				c.beginPath();
+				c.ellipse(x, y, r * 0.5, r * 0.4, 0, 0, Math.PI * 2);
+				c.fill();
+			}
+		} else if (kind === 'stars') {
+			for (let i = 0; i < (width * height) / 400; i++) {
+				c.fillStyle = `rgba(255, 255, 255, ${0.3 + rnd() * 0.7})`;
+				const r = rnd() < 0.9 ? 0.8 : 1.8;
+				c.beginPath();
+				c.arc(rnd() * width, rnd() * height, r, 0, Math.PI * 2);
+				c.fill();
+			}
+			const neb = c.createRadialGradient(
+				width * 0.7,
+				height * 0.3,
+				0,
+				width * 0.7,
+				height * 0.3,
+				width * 0.6
+			);
+			neb.addColorStop(0, 'rgba(255, 79, 200, 0.25)');
+			neb.addColorStop(1, 'rgba(255, 79, 200, 0)');
+			c.fillStyle = neb;
+			c.fillRect(0, 0, width, height);
+		} else {
+			// Holographic: soft rainbow bands
+			const g = c.createLinearGradient(0, height, width, 0);
+			['#ff8ad8', '#8ad8ff', '#fff38a', '#b18aff', '#8affc1'].forEach((col, i, a) =>
+				g.addColorStop(i / (a.length - 1), col)
+			);
+			c.globalAlpha = 0.35;
+			c.fillStyle = g;
+			c.fillRect(0, 0, width, height);
+			c.globalAlpha = 1;
+		}
 	}
 
 	let last: { x: number; y: number; t: number } | null = null;

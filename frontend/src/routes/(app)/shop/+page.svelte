@@ -4,7 +4,8 @@
 	import { post } from '#lib/api.ts';
 	import { getSession } from '#lib/session.svelte.ts';
 	import { SERIES_LOOK, cosmeticKey } from '#lib/series.ts';
-	import type { Bought, Cosmetic, TicketDto } from '#lib/types.ts';
+	import type { Bought, Cosmetic, MeDto, TicketDto } from '#lib/types.ts';
+	import { achievementName } from '#lib/prize.ts';
 	import CosmeticBadge from '#lib/components/CosmeticBadge.svelte';
 
 	let { data }: PageProps = $props();
@@ -21,20 +22,17 @@
 	);
 	let notice = $state('');
 
-	const THEMES: Cosmetic[] = (['midnight', 'sunset', 'mint', 'neon', 'royal'] as const).map(
-		(id) => ({
-			kind: 'theme',
-			id
-		})
-	);
-	const TOOLS: Cosmetic[] = (['coin', 'key', 'eraser', 'laser'] as const).map((id) => ({
-		kind: 'tool',
-		id
+	/** Every cosmetic by kind, in the server's order, with where it comes from */
+	const groups = (['theme', 'tool', 'foil'] as const).map((kind) => ({
+		title: `shop.${kind}s` as const,
+		offers: data.shop.cosmetics.filter((c) => c.item.kind === kind)
 	}));
-	const price = (item: Cosmetic) =>
-		data.shop.cosmetics.find((c) => c.item.kind === item.kind && c.item.id === item.id)?.price;
 	const wearing = (item: Cosmetic) =>
-		item.kind === 'theme' ? session.me.theme === item.id : session.me.tool === item.id;
+		item.kind === 'theme'
+			? session.me.theme === item.id
+			: item.kind === 'tool'
+				? session.me.tool === item.id
+				: session.me.foil === item.id;
 	const keyOf = (item: Cosmetic) => `${item.kind}:${item.id}`;
 
 	async function run(key: string, f: () => Promise<void>) {
@@ -71,12 +69,10 @@
 
 	const wear = (item: Cosmetic) =>
 		run(keyOf(item), async () => {
-			const r = await post<{ theme: typeof session.me.theme; tool: typeof session.me.tool }>(
-				'/cosmetics/equip',
-				{ item }
-			);
+			const r = await post<Pick<MeDto, 'theme' | 'tool' | 'foil'>>('/cosmetics/equip', { item });
 			session.me.theme = r.theme;
 			session.me.tool = r.tool;
+			session.me.foil = r.foil;
 		});
 </script>
 
@@ -135,13 +131,13 @@
 		</ul>
 	</section>
 
-	{#each [{ title: 'shop.themes', items: THEMES }, { title: 'shop.tools', items: TOOLS }] as const as group (group.title)}
+	{#each groups as group (group.title)}
 		<section>
 			<h2>{i18n.t(group.title)}</h2>
 			<ul class="offers grid">
-				{#each group.items as item (keyOf(item))}
-					{@const p = price(item)}
-					{@const owned = session.owns(item)}
+				{#each group.offers as { item, origin } (keyOf(item))}
+					{@const p = origin.kind === 'shop' ? origin.price : undefined}
+					{@const owned = session.owns(item) || origin.kind === 'default'}
 					<li class="offer cosmetic" class:wearing={wearing(item)} data-item={keyOf(item)}>
 						<CosmeticBadge {item} />
 						<h3>{i18n.t(cosmeticKey(item))}</h3>
@@ -164,6 +160,12 @@
 								onclick={() => buyCosmetic(item)}
 								aria-label="{i18n.t('shop.buy')} {i18n.t(cosmeticKey(item))}"
 								>🪙 {i18n.num(p)}</button
+							>
+						{:else if origin.kind === 'trophy'}
+							<span class="tag locked"
+								>🏆 {i18n.t('shop.trophy', {
+									name: achievementName(i18n, origin.achievement)
+								})}</span
 							>
 						{:else}
 							<span class="tag locked">{i18n.t('shop.golden_only')}</span>

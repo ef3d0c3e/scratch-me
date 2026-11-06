@@ -79,6 +79,89 @@
 	--foil-4: #140e2e;
 	--foil-ink: rgba(0, 255, 213, 0.35);
 }
+:root[data-skin='ocean'] {
+	--night: #03203a;
+	--night-2: #072e4f;
+	--night-3: #0b4a73;
+	--muted: #9cc7d9;
+	--glow: #0ea5e9;
+	--gold: #7dd3fc;
+	--gold-deep: #0ea5e9;
+	--gold-shadow: #075985;
+	--pink: #fb7185;
+	--foil-1: #cfe6f0;
+	--foil-2: #9cc7d9;
+	--foil-3: #eef8fc;
+	--foil-4: #6fa3ba;
+	--foil-ink: rgba(5, 60, 90, 0.22);
+}
+:root[data-skin='candy'] {
+	--night: #3a0d2e;
+	--night-2: #561443;
+	--night-3: #7a1f5c;
+	--muted: #f5b8dc;
+	--glow: #ff7ac6;
+	--gold: #ffb3d9;
+	--gold-deep: #ff5fae;
+	--gold-shadow: #9d174d;
+	--pink: #a5f3fc;
+	--pink-shadow: #0e7490;
+	--foil-1: #fde2f1;
+	--foil-2: #f5b8dc;
+	--foil-3: #fff3fa;
+	--foil-4: #e895c4;
+	--foil-ink: rgba(130, 20, 80, 0.22);
+}
+:root[data-skin='arcade'] {
+	--night: #0a0a12;
+	--night-2: #14142a;
+	--night-3: #1f1f3a;
+	--muted: #9d9dc9;
+	--glow: #00f0ff;
+	--gold: #00f0ff;
+	--gold-deep: #00b8c4;
+	--gold-shadow: #005f66;
+	--pink: #ff3cac;
+	--mint: #b8ff3c;
+	--line: rgba(0, 240, 255, 0.22);
+	--foil-1: #2a2a4a;
+	--foil-2: #1a1a33;
+	--foil-3: #3d3d6b;
+	--foil-4: #101024;
+	--foil-ink: rgba(255, 60, 172, 0.35);
+}
+:root[data-skin='forest'] {
+	--night: #0d1f12;
+	--night-2: #15301c;
+	--night-3: #1f3d24;
+	--muted: #b6c9a8;
+	--glow: #4d7c0f;
+	--gold: #d9b26a;
+	--gold-deep: #a8842e;
+	--gold-shadow: #5a4410;
+	--pink: #f29e6d;
+	--foil-1: #c8d6bb;
+	--foil-2: #9fb48c;
+	--foil-3: #e5eedc;
+	--foil-4: #7f9a6b;
+	--foil-ink: rgba(30, 50, 20, 0.25);
+}
+:root[data-skin='champion'] {
+	--night: #120a00;
+	--night-2: #241600;
+	--night-3: #3d2400;
+	--muted: #e6c995;
+	--glow: #ffb700;
+	--gold: #ffd700;
+	--gold-deep: #e0a800;
+	--pink: #ff6b3d;
+	--line: rgba(255, 215, 0, 0.22);
+	--foil-1: #fff0b3;
+	--foil-2: #e6c36a;
+	--foil-3: #fffbe6;
+	--foil-4: #c99a2e;
+	--foil-ink: rgba(100, 60, 0, 0.3);
+}
 :root[data-skin='royal'] {
 	--night: #0b0e2a;
 	--night-2: #141a45;
