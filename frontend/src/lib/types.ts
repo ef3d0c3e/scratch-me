@@ -1,6 +1,15 @@
 /** Shapes of the API's responses, see backend/src/routes */
 
-export type Series = 'lucky_three' | 'number_match' | 'ticket_chain' | 'cash_wheel' | 'golden';
+export type Series =
+	| 'lucky_three'
+	| 'high_card'
+	| 'lucky_reels'
+	| 'bingo'
+	| 'number_match'
+	| 'cash_wheel'
+	| 'treasure_dig'
+	| 'ticket_chain'
+	| 'golden';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward';
 
 export type ThemeId = 'midnight' | 'sunset' | 'mint' | 'neon' | 'royal';
@@ -225,4 +234,40 @@ export interface ProfileDto {
 	achievements: string[];
 	/** The viewer muted them */
 	muted: boolean;
+}
+
+export interface PlayingCard {
+	/** 2 to 14 (the ace) */
+	rank: number;
+	suit: 'spades' | 'hearts' | 'diamonds' | 'clubs';
+}
+
+export interface HighCardLayout {
+	dealer: PlayingCard;
+	hands: { card: PlayingCard; coins: number }[];
+}
+
+export type ReelSymbol = 'cherry' | 'lemon' | 'bell' | 'bar' | 'seven';
+
+export interface ReelsLayout {
+	/** Reel by reel, top to bottom */
+	reels: ReelSymbol[][];
+	/** Paylines that pay: rows 0–2, then the two diagonals */
+	lines: number[];
+}
+
+export interface BingoLayout {
+	/** Row by row; 0 is the free middle */
+	card: number[][];
+	calls: number[];
+	lines: number[];
+}
+
+export type Spot = { kind: 'sand' } | { kind: 'chest'; coins: number } | { kind: 'map' };
+
+export interface DigState {
+	dug: { cell: number; spot: Spot }[];
+	digs_left: number;
+	/** After the last dig: the whole beach and the prize */
+	done: Scratched | null;
 }

@@ -254,5 +254,32 @@ export default {
 	'errors.not_earned': 'Vous ne l’avez pas encore obtenu.',
 	'errors.player': 'Aucun joueur de ce nom.',
 	'errors.cannot_mute_self': 'Impossible de vous masquer vous-même.',
-	'errors.announcement': 'Cette annonce n’existe plus.'
+	'errors.announcement': 'Cette annonce n’existe plus.',
+
+	'series.high_card': 'Carte Haute',
+	'series.high_card.rules': 'Chaque carte plus forte que celle du croupier gagne son lot',
+	'series.lucky_reels': 'Rouleaux Chance',
+	'series.lucky_reels.rules': 'Trois symboles identiques sur l’une des 5 lignes gagnent',
+	'series.bingo': 'Bingo',
+	'series.bingo.rules': 'Chaque ligne, colonne ou diagonale complète compte',
+	'series.treasure_dig': 'Chasse au Trésor',
+	'series.treasure_dig.rules':
+		'À vous de choisir où creuser : 4 coups, les coffres paient, une carte en offre un de plus',
+	'high.dealer': 'Croupier',
+	'high.yours': 'Vos cartes',
+	'reels.cherry': 'Cerise',
+	'reels.lemon': 'Citron',
+	'reels.bell': 'Cloche',
+	'bingo.calls': 'Numéros tirés',
+	'bingo.pays': '1 ligne 120 · 2 lignes 300 · 3 lignes 800 · 4 lignes 2 500',
+	'treasure.left_one': '{n} coup restant',
+	'treasure.left_other': '{n} coups restants',
+	'treasure.over': 'Tout est creusé ! Voici ce qui était caché',
+	'treasure.map': '+1 coup',
+	'treasure.sand': 'Sable',
+	'treasure.hint': 'Grattez un endroit pour y creuser',
+	'errors.dig_ticket': 'Ce ticket se joue en creusant.',
+	'errors.dug_already': 'Vous avez déjà creusé là.',
+	'errors.no_digs_left': 'Plus de coups.',
+	'errors.no_such_spot': 'Cet endroit n’est pas sur la plage.'
 } satisfies Record<keyof typeof en, string>;

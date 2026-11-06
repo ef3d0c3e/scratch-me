@@ -35,6 +35,8 @@
 		cols?: number;
 		/** What the player scratches with: brush, flakes, the icon under the finger */
 		tool?: ToolId;
+		/** The moving shine; off for many small foils at once */
+		shiny?: boolean;
 		rows?: number;
 	}
 	let {
@@ -46,7 +48,8 @@
 		label,
 		cols = 1,
 		rows = 1,
-		tool = 'coin'
+		tool = 'coin',
+		shiny = true
 	}: Props = $props();
 
 	let wrap = $state<HTMLDivElement>();
@@ -101,7 +104,7 @@
 		// Listen from the start: where permission is needed (iOS) nothing comes
 		// until the player allows it, asked on their first touch
 		listenTilt();
-		sheenFrame = requestAnimationFrame(shine);
+		if (shiny) sheenFrame = requestAnimationFrame(shine);
 		// The words use the display font: paint again once it is in, unless scratched already
 		document.fonts?.load(`400 20px Bungee`).then(() => {
 			if (!touched) paint();

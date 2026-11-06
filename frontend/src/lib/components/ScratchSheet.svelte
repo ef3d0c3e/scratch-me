@@ -4,7 +4,10 @@
 	import { post } from '#lib/api.ts';
 	import type {
 		ChainLayout,
+		BingoLayout,
 		GoldenLayout,
+		HighCardLayout,
+		ReelsLayout,
 		LuckyLayout,
 		NumberLayout,
 		Scratched,
@@ -16,7 +19,11 @@
 	import { show, tier as tierOf } from '#lib/fx/celebrate.ts';
 	import { getFx } from '#lib/fx/fx.svelte.ts';
 	import { THEME_PITCH, TOOLS } from '#lib/fx/tools.ts';
-	import { FOIL_GRID, SERIES_LOOK, cosmeticKey } from '#lib/series.ts';
+	import { FOIL_GRID, SERIES_LOOK, cosmeticKey, isDig } from '#lib/series.ts';
+	import BingoFace from './faces/BingoFace.svelte';
+	import HighCardFace from './faces/HighCardFace.svelte';
+	import ReelsFace from './faces/ReelsFace.svelte';
+	import TreasureFace from './faces/TreasureFace.svelte';
 	import Celebration from './Celebration.svelte';
 	import Counter from './Counter.svelte';
 	import ScratchFoil from './ScratchFoil.svelte';
@@ -69,6 +76,18 @@
 	let takeover = $state(false);
 
 	onMount(() => {
+		// A dig ticket is played spot by spot: its face asks the server itself
+		if (!isDig(ticket.series)) scratch();
+		// The page behind must not scroll while scratching
+		const overflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			fx.scratchStop();
+			document.body.style.overflow = overflow;
+		};
+	});
+
+	function scratch() {
 		post<Scratched>(`/tickets/${ticket.id}/scratch`)
 			.then((r) => (result = r))
 			.catch((e) => {
@@ -79,14 +98,15 @@
 					error = i18n.t('scratch.gone');
 				} else error = i18n.error(e);
 			});
-		// The page behind must not scroll while scratching
-		const overflow = document.body.style.overflow;
-		document.body.style.overflow = 'hidden';
-		return () => {
-			fx.scratchStop();
-			document.body.style.overflow = overflow;
-		};
-	});
+	}
+
+	/** The last dig: the beach is out, the prize shows */
+	function dug(r: Scratched) {
+		result = r;
+		revealed = true;
+		// A beat to see the last spot before the prize lands
+		setTimeout(settle, 500);
+	}
 
 	function report() {
 		if (result && !reported) {
@@ -214,6 +234,41 @@
 				onsettled={settle}
 				ontick={() => fx.tick()}
 			/>
+		{:else if ticket.series === 'high_card'}
+			<HighCardFace
+				layout={result?.layout as HighCardLayout | null}
+				{revealed}
+				{foil}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'lucky_reels'}
+			<ReelsFace
+				layout={result?.layout as ReelsLayout | null}
+				{revealed}
+				{foil}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'bingo'}
+			<BingoFace
+				layout={result?.layout as BingoLayout | null}
+				{revealed}
+				{foil}
+				onsettled={settle}
+			/>
+		{:else if ticket.series === 'treasure_dig'}
+			<TreasureFace
+				{ticket}
+				{tool}
+				ondone={dug}
+				onerror={(e) => (error = i18n.error(e))}
+				onscratchstart={() => fx.unlock()}
+				onscratch={(speed) => fx.scratch(speed, voice.pitch, voice.q)}
+				onscratchend={() => fx.scratchStop()}
+				onfind={(spot) => {
+					fx.scratchStop();
+					if (spot.kind !== 'sand') fx.win('small');
+				}}
+			/>
 		{:else}
 			<GoldenFace
 				layout={result?.layout as GoldenLayout | null}
@@ -245,13 +300,17 @@
 			</p>
 			<p class="sub">{sub}</p>
 		{:else if !revealed}
-			<p class="hint">{i18n.t('scratch.hint')}</p>
+			<p class="hint">
+				{isDig(ticket.series) ? i18n.t('treasure.hint') : i18n.t('scratch.hint')}
+			</p>
 		{/if}
 	</div>
 
 	<footer>
 		{#if error}
 			<button type="button" class="btn primary" onclick={onclose}>{i18n.t('scratch.done')}</button>
+		{:else if !revealed && isDig(ticket.series)}
+			<!-- No reveal all: the player chooses where to dig -->
 		{:else if !revealed}
 			<button type="button" class="btn ghost" disabled={!result} onclick={reveal}
 				>{i18n.t('scratch.reveal_all')}</button
@@ -284,6 +343,10 @@
 
 <style>
 	.sheet {
+		/* Dragging a finger scratches; it must not select the text under it */
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-touch-callout: none;
 		position: fixed;
 		inset: 0;
 		z-index: 50;
