@@ -28,6 +28,7 @@ pub fn pool() -> Vec<Quest> {
         q("pocket", 1, Prize::Coins { amount: 50 }, 1),
         q("envelope", 1, Prize::Coins { amount: 50 }, 1),
         q("buy", 1, Prize::Ticket { series: LuckyThree }, 1),
+        q("shout", 1, Prize::Coins { amount: 50 }, 1),
         q("number_match", 1, Prize::Coins { amount: 120 }, 3),
         q("cash_wheel", 1, Prize::Coins { amount: 200 }, 5),
     ]
@@ -49,6 +50,7 @@ pub fn counts(key: &str, event: &Event) -> i32 {
         ("pocket", Event::PocketTaken(n)) if *n > 0 => 1,
         ("envelope", Event::EnvelopeOpened { .. }) => 1,
         ("buy", Event::Bought(_)) => 1,
+        ("shout", Event::Shouted) => 1,
         ("number_match", Event::Scratched(s)) if s.series == Series::NumberMatch => 1,
         ("cash_wheel", Event::Scratched(s)) if s.series == Series::CashWheel => 1,
         _ => 0,

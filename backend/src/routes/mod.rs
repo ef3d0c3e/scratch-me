@@ -5,6 +5,7 @@ use crate::auth;
 pub mod player;
 pub mod progression;
 pub mod shop;
+pub mod social;
 pub mod tickets;
 
 #[get("/health")]
@@ -33,6 +34,17 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(shop::equip)
             .service(progression::get_quests)
             .service(progression::reroll)
-            .service(progression::get_achievements),
+            .service(progression::get_achievements)
+            .service(social::live)
+            .service(social::get_shoutbox)
+            .service(social::post_shout)
+            .service(social::list_mutes)
+            .service(social::mute)
+            .service(social::unmute)
+            .service(social::get_announcements)
+            .service(social::post_announcement)
+            .service(social::delete_announcement)
+            .service(social::profile)
+            .service(social::set_title),
     );
 }

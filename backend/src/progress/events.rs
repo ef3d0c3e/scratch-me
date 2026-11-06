@@ -12,6 +12,8 @@ pub enum Event {
         streak: i32,
     },
     Bought(Series),
+    /// A message in the shoutbox
+    Shouted,
 }
 
 /// A ticket scratched, with what the achievements look at
@@ -60,7 +62,7 @@ pub fn xp(event: &Event) -> i64 {
         // Every scratch counts; wins more, big wins more still
         Event::Scratched(s) => 10 + if s.win { 5 } else { 0 } + (s.coins / 20).min(50),
         Event::EnvelopeOpened { .. } => 20,
-        Event::PocketTaken(_) | Event::Bought(_) => 0,
+        Event::PocketTaken(_) | Event::Bought(_) | Event::Shouted => 0,
     }
 }
 

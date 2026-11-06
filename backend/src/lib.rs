@@ -4,6 +4,7 @@ pub mod cosmetics;
 pub mod db;
 pub mod envelope;
 pub mod error;
+pub mod live;
 pub mod pocket;
 pub mod progress;
 pub mod ratelimit;
@@ -20,6 +21,19 @@ pub const STARTING_COINS: i64 = 500;
 
 pub struct AppState {
     pub pool: db::DbPool,
+    pub live: live::Hub,
     pub limits: ratelimit::AuthLimits,
     pub config: Arc<Config>,
+}
+
+/// Makes a player an admin; false when there is no such player
+pub async fn make_admin(database_url: &str, username: &str) -> anyhow::Result<bool> {
+    use diesel::prelude::*;
+    use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+    let mut conn = AsyncPgConnection::establish(database_url).await?;
+    let n = diesel::update(schema::users::table.filter(schema::users::username.eq(username)))
+        .set(schema::users::is_admin.eq(true))
+        .execute(&mut conn)
+        .await?;
+    Ok(n == 1)
 }

@@ -71,6 +71,7 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
     }
     .ok_or(ApiError::Invalid("not_for_sale"))?;
     let mut conn = state.pool.get().await?;
+    let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {
             if let Buy::Ticket { series } = &buy {
@@ -114,6 +115,7 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
             }
         })
         .await?;
+    crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     Ok(web::Json(out))
 }
 

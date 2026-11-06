@@ -156,13 +156,14 @@ pub async fn scratch(
 ) -> ApiResult<web::Json<Scratched>> {
     let id = path.into_inner();
     let mut conn = state.pool.get().await?;
+    let uid = user.id;
     let out = conn
         .transaction(async move |conn| {
             // Only one request can flip scratched_at: a double tap pays once
             let row: Option<(String, serde_json::Value, serde_json::Value)> = diesel::update(
                 tickets::table
                     .filter(tickets::id.eq(id))
-                    .filter(tickets::user_id.eq(user.id))
+                    .filter(tickets::user_id.eq(uid))
                     .filter(tickets::scratched_at.is_null()),
             )
             .set(tickets::scratched_at.eq(Utc::now()))
@@ -172,7 +173,7 @@ pub async fn scratch(
             .optional()?;
             let Some((series, layout, prize)) = row else {
                 let exists: bool = diesel::select(diesel::dsl::exists(
-                    tickets::table.filter(tickets::id.eq(id)).filter(tickets::user_id.eq(user.id)),
+                    tickets::table.filter(tickets::id.eq(id)).filter(tickets::user_id.eq(uid)),
                 ))
                 .get_result(conn)
                 .await?;
@@ -183,11 +184,11 @@ pub async fn scratch(
                 });
             };
             let prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
-            let g = grant(conn, user.id, &prize, Source::Prize).await?;
+            let g = grant(conn, uid, &prize, Source::Prize).await?;
             let kind = Series::parse(&series).ok_or_else(|| ApiError::Internal(anyhow::anyhow!("series {series}")))?;
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
             let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra));
-            let progress = progress::apply(conn, user.id, &[event]).await?;
+            let progress = progress::apply(conn, uid, &[event]).await?;
             Ok::<_, ApiError>(Scratched {
                 id,
                 series,
@@ -200,5 +201,11 @@ pub async fn scratch(
             })
         })
         .await?;
+    // Committed: now everyone may hear of it
+    if let Some(series) = Series::parse(&out.series) {
+        let extra = if out.duplicate { DUPLICATE_COINS } else { 0 };
+        let s = Scratch::of(series, &out.layout, &out.prize, extra);
+        crate::live::broadcast(&state.live, &user.username, Some((series, &s, &out.prize)), &out.progress.achievements);
+    }
     Ok(web::Json(out))
 }

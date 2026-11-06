@@ -9,11 +9,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    announcements (id) {
+        id -> Int8,
+        author_id -> Nullable<Int8>,
+        body -> Text,
+        created_at -> Timestamptz,
+        removed_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
     cosmetics (user_id, kind, item) {
         user_id -> Int8,
         kind -> Text,
         item -> Text,
         obtained_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    mutes (user_id, muted_id) {
+        user_id -> Int8,
+        muted_id -> Int8,
     }
 }
 
@@ -45,6 +62,15 @@ diesel::table! {
         last_seen_at -> Timestamptz,
         expires_at -> Timestamptz,
         user_agent -> Text,
+    }
+}
+
+diesel::table! {
+    shouts (id) {
+        id -> Int8,
+        user_id -> Int8,
+        body -> Text,
+        created_at -> Timestamptz,
     }
 }
 
@@ -94,6 +120,8 @@ diesel::table! {
         theme -> Text,
         tool -> Text,
         xp -> Int8,
+        title -> Nullable<Text>,
+        is_admin -> Bool,
     }
 }
 
@@ -102,16 +130,20 @@ diesel::joinable!(cosmetics -> users (user_id));
 diesel::joinable!(quest_days -> users (user_id));
 diesel::joinable!(quests -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
+diesel::joinable!(shouts -> users (user_id));
 diesel::joinable!(stats -> users (user_id));
 diesel::joinable!(streaks -> users (user_id));
 diesel::joinable!(tickets -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     achievements,
+    announcements,
     cosmetics,
+    mutes,
     quest_days,
     quests,
     sessions,
+    shouts,
     stats,
     streaks,
     tickets,

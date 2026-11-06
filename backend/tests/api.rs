@@ -25,6 +25,7 @@ async fn state() -> Option<web::Data<AppState>> {
         Config { database_url: url.clone(), bind: String::new(), secure_cookies: false, trusted_proxies: vec![] };
     Some(web::Data::new(AppState {
         pool: db::pool(&url).unwrap(),
+        live: Default::default(),
         limits: scratchme_api::ratelimit::AuthLimits::relaxed(),
         config: Arc::new(config),
     }))
@@ -540,4 +541,153 @@ async fn one_reroll_a_day() {
     assert_eq!(q["rerolled"], true);
     let (status, body) = post_json(&app, "/api/quests/reroll", &me, json!({ "key": "win_3" })).await;
     assert_eq!((status, body["error"].as_str()), (409, Some("already_rerolled")));
+}
+
+async fn delete<S>(app: &S, uri: &str, cookie: &Cookie<'static>) -> u16
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    test::call_service(app, test::TestRequest::delete().uri(uri).cookie(cookie.clone()).to_request())
+        .await
+        .status()
+        .as_u16()
+}
+
+#[actix_web::test]
+async fn shouts_are_shared_paced_and_mutable() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let a_name = unique("loud");
+    let a = register(&app, &a_name, "UTC").await;
+    let b = register(&app, &unique("ears"), "UTC").await;
+    let mut rx = state.live.subscribe();
+
+    let (status, body) = post_json(&app, "/api/shoutbox", &a, json!({ "body": "  hello all  " })).await;
+    assert_eq!(status, 201);
+    assert_eq!(body["shout"]["body"], "hello all");
+    assert_eq!(body["shout"]["level"], 1);
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    assert_eq!((live["type"].as_str(), live["body"].as_str()), (Some("chat"), Some("hello all")));
+
+    let (status, _) = post_json(&app, "/api/shoutbox", &a, json!({ "body": "again" })).await;
+    assert_eq!(status, 429, "one shout every 2 seconds");
+    let (status, _) = post_json(&app, "/api/shoutbox", &a, json!({ "body": "x".repeat(301) })).await;
+    assert_eq!(status, 422);
+    let (status, _) = post_json(&app, "/api/shoutbox", &a, json!({ "body": "   " })).await;
+    assert_eq!(status, 422);
+
+    let (_, seen) = get(&app, "/api/shoutbox", &b).await;
+    assert!(seen.as_array().unwrap().iter().any(|m| m["user"] == a_name.as_str()));
+    assert_eq!(post(&app, &format!("/api/mutes/{a_name}"), &b).await.0, 204);
+    let (_, seen) = get(&app, "/api/shoutbox", &b).await;
+    assert!(!seen.as_array().unwrap().iter().any(|m| m["user"] == a_name.as_str()), "muted");
+    let (_, list) = get(&app, "/api/mutes", &b).await;
+    assert_eq!(list, json!([a_name]));
+    assert_eq!(delete(&app, &format!("/api/mutes/{a_name}"), &b).await, 204);
+    let (_, seen) = get(&app, "/api/shoutbox", &b).await;
+    assert!(seen.as_array().unwrap().iter().any(|m| m["user"] == a_name.as_str()));
+}
+
+#[actix_web::test]
+async fn shouting_moves_its_quest() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("hi");
+    let me = register(&app, &name, "UTC").await;
+    set_quests(&name, &[("shout", 0), ("pocket", 0), ("win_3", 0)]).await;
+    let (_, body) = post_json(&app, "/api/shoutbox", &me, json!({ "body": "hi" })).await;
+    assert_eq!(body["progress"]["quests"][0]["what"], "shout");
+    assert_eq!(body["progress"]["coins"], STARTING_COINS + 50);
+}
+
+#[actix_web::test]
+async fn only_admins_announce() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("boss");
+    let admin = register(&app, &name, "UTC").await;
+    let player = register(&app, &unique("pleb"), "UTC").await;
+    let (status, _) = post_json(&app, "/api/announcements", &player, json!({ "body": "free coins!" })).await;
+    assert_eq!(status, 403);
+
+    assert!(scratchme_api::make_admin(&std::env::var("TEST_DATABASE_URL").unwrap(), &name).await.unwrap());
+    let mut rx = state.live.subscribe();
+    let (status, a) = post_json(&app, "/api/announcements", &admin, json!({ "body": "Happy hour tonight" })).await;
+    assert_eq!(status, 201);
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    assert_eq!(live["type"], "announcement");
+    let (_, list) = get(&app, "/api/announcements", &player).await;
+    assert_eq!(list[0]["body"], "Happy hour tonight");
+
+    let id = a["id"].as_i64().unwrap();
+    assert_eq!(delete(&app, &format!("/api/announcements/{id}"), &player).await, 403);
+    assert_eq!(delete(&app, &format!("/api/announcements/{id}"), &admin).await, 204);
+    let (_, list) = get(&app, "/api/announcements", &player).await;
+    assert!(list.as_array().unwrap().iter().all(|x| x["id"] != id));
+    assert_eq!(delete(&app, &format!("/api/announcements/{id}"), &admin).await, 404);
+}
+
+#[actix_web::test]
+async fn big_wins_reach_everyone_after_the_scratch() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("lucky");
+    let me = register(&app, &name, "UTC").await;
+    let mut rx = state.live.subscribe();
+    let small = known_ticket(
+        &name,
+        "lucky_three",
+        json!({ "cells": vec!["clover"; 9], "win": "clover" }),
+        json!({ "kind": "coins", "amount": 50 }),
+    )
+    .await;
+    let big = known_ticket(
+        &name,
+        "lucky_three",
+        json!({ "cells": vec!["gem"; 9], "win": "gem" }),
+        json!({ "kind": "coins", "amount": 1000 }),
+    )
+    .await;
+    post(&app, &format!("/api/tickets/{small}/scratch"), &me).await;
+    assert!(rx.try_recv().is_err(), "50 coins is not news");
+    post(&app, &format!("/api/tickets/{big}/scratch"), &me).await;
+    let live: Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+    assert_eq!(live["type"], "win");
+    assert_eq!(live["user"], name.as_str());
+    assert_eq!(live["prize"], json!({ "kind": "coins", "amount": 1000 }));
+    assert!(state.live.feed().iter().any(|f| matches!(f, scratchme_api::live::FeedItem::Win(w) if w.user == name)));
+}
+
+#[actix_web::test]
+async fn profiles_and_titles() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("pro");
+    let me = register_fresh(&app, &name, "UTC").await;
+    set_quests(&name, &[]).await;
+    let other = register(&app, &unique("look"), "UTC").await;
+    let id = known_ticket(
+        &name,
+        "lucky_three",
+        json!({ "cells": vec!["coin"; 9], "win": "coin" }),
+        json!({ "kind": "coins", "amount": 200 }),
+    )
+    .await;
+    post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+
+    let (status, p) = get(&app, &format!("/api/players/{}", name.to_uppercase()), &other).await;
+    assert_eq!(status, 200, "names are found whatever their case");
+    assert_eq!(p["username"], name.as_str());
+    assert_eq!((p["scratched"].as_i64(), p["wins"].as_i64(), p["best_win"].as_i64()), (Some(1), Some(1), Some(200)));
+    assert_eq!(p["achievements"].as_array().unwrap().len(), 3);
+    assert_eq!(get(&app, "/api/players/nobody-at-all", &other).await.0, 404);
+
+    let (status, _) = post_json(&app, "/api/me/title", &me, json!({ "title": "jackpot" })).await;
+    assert_eq!(status, 409, "not earned");
+    let (status, _) = post_json(&app, "/api/me/title", &me, json!({ "title": "big_win" })).await;
+    assert_eq!(status, 200);
+    let (_, body) = post_json(&app, "/api/shoutbox", &me, json!({ "body": "look at my title" })).await;
+    assert_eq!(body["shout"]["title"], "big_win");
+    let (_, p) = get(&app, &format!("/api/players/{name}"), &other).await;
+    assert_eq!(p["title"], "big_win");
 }

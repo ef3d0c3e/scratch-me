@@ -43,16 +43,32 @@ pub struct MeDto {
     /// Cosmetics owned besides the defaults
     pub owned: Vec<Cosmetic>,
     pub level: levels::LevelDto,
+    /// The achievement shown next to their name
+    pub title: Option<String>,
+    pub is_admin: bool,
     /// Unscratched tickets, oldest first
     pub tickets: Vec<TicketDto>,
 }
 
+/// coins, tz, pocket count and time, theme, tool, xp, title, admin
+type UserRow = (i64, String, i32, DateTime<Utc>, String, String, i64, Option<String>, bool);
+
 #[get("/me")]
 pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<MeDto>> {
     let mut conn = state.pool.get().await?;
-    let (coins, tz, stored, at, theme, tool, xp): (i64, String, i32, DateTime<Utc>, String, String, i64) = users::table
+    let (coins, tz, stored, at, theme, tool, xp, title, is_admin): UserRow = users::table
         .find(user.id)
-        .select((users::coins, users::tz, users::pocket_count, users::pocket_at, users::theme, users::tool, users::xp))
+        .select((
+            users::coins,
+            users::tz,
+            users::pocket_count,
+            users::pocket_at,
+            users::theme,
+            users::tool,
+            users::xp,
+            users::title,
+            users::is_admin,
+        ))
         .first(&mut conn)
         .await?;
     let owned: Vec<(String, String)> = cosmetics::table
@@ -98,6 +114,8 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         tool,
         owned,
         level: levels::dto(xp),
+        title,
+        is_admin,
         tickets: held,
     }))
 }
@@ -113,6 +131,7 @@ pub struct PocketClaim {
 #[post("/pocket/claim")]
 pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<PocketClaim>> {
     let mut conn = state.pool.get().await?;
+    let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {
             // The row lock makes concurrent claims take turns
@@ -136,6 +155,7 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
             Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now), progress })
         })
         .await?;
+    crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     Ok(web::Json(out))
 }
 
@@ -152,6 +172,7 @@ pub struct EnvelopeClaim {
 #[post("/envelope/claim")]
 pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<EnvelopeClaim>> {
     let mut conn = state.pool.get().await?;
+    let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {
             let tz: String = users::table.find(user.id).select(users::tz).for_update().first(conn).await?;
@@ -187,5 +208,6 @@ pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> Ap
             Ok::<_, ApiError>(EnvelopeClaim { day, contents, coins: progress.coins, tickets, progress })
         })
         .await?;
+    crate::live::broadcast(&state.live, &name, None, &out.progress.achievements);
     Ok(web::Json(out))
 }

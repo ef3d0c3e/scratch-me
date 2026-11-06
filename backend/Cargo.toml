@@ -13,6 +13,7 @@ name = "scratchme-api"
 path = "src/main.rs"
 
 [dependencies]
+actix-ws = "0.4"
 actix-web = { version = "4", default-features = false, features = ["macros", "cookies", "compress-gzip"] }
 anyhow = "1"
 argon2 = "0.5"
