@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
-	import type { LuckyLayout, LuckySymbol } from '#lib/types.ts';
+	import type { LuckyLayout, LuckySymbol, Series } from '#lib/types.ts';
 	import LuckyGrid from '../LuckyGrid.svelte';
 	import Symbol from '../Symbol.svelte';
 
@@ -10,8 +10,11 @@
 		revealed: boolean;
 		foil: Snippet;
 		onsettled: () => void;
+		/** Platinum Three: the same grid, a richer table */
+		series?: Series;
 	}
-	let { layout, revealed, foil, onsettled }: Props = $props();
+	let { layout, revealed, foil, onsettled, series = 'lucky_three' }: Props = $props();
+	const platinum = $derived(series === 'platinum_three');
 	const i18n = getI18n();
 
 	const PAYTABLE = [
@@ -28,7 +31,7 @@
 	});
 </script>
 
-<p class="rules">{i18n.t('series.lucky_three.rules')}</p>
+<p class="rules">{i18n.t(`series.${platinum ? 'platinum_three' : 'lucky_three'}.rules`)}</p>
 <div class="play square">
 	<LuckyGrid {layout} {revealed} />
 	{@render foil()}
@@ -39,7 +42,7 @@
 			<span class="icons" aria-hidden="true">
 				{#each [0, 1, 2] as k (k)}<span class="mini"><Symbol symbol={s} label="" /></span>{/each}
 			</span>
-			<span>{i18n.t(`paytable.${s}`)}</span>
+			<span>{i18n.t(platinum ? `paytable.platinum.${s}` : `paytable.${s}`)}</span>
 		</li>
 	{/each}
 </ul>

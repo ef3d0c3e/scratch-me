@@ -8,6 +8,7 @@ use actix_web::dev::{Service, ServiceResponse};
 use actix_web::{App, test, web};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use scratchme_api::progress::levels;
 use scratchme_api::{AppState, Config, STARTING_COINS, db, pocket, routes, schema};
 use serde_json::{Value, json};
 
@@ -310,8 +311,8 @@ async fn shop_sells_tickets_for_coins() {
     let me = register(&app, &name, "UTC").await;
     let (status, body) =
         post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "cash_wheel" })).await;
-    assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")), "the wheel takes level 5");
-    set_xp(&name, 1000).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")), "the wheel is tier 3");
+    set_xp(&name, levels::xp_for(6)).await;
     let (status, shop) = get(&app, "/api/shop", &me).await;
     assert_eq!(status, 200);
     let wheel = shop["tickets"].as_array().unwrap().iter().find(|t| t["series"] == "cash_wheel").unwrap();
@@ -339,7 +340,7 @@ async fn buying_at_once_never_overspends() {
     let name = unique("race");
     let me = register(&app, &name, "UTC").await;
     set_coins(&name, 160).await;
-    set_xp(&name, 300).await;
+    set_xp(&name, levels::xp_for(3)).await;
     let buy = || post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": "number_match" }));
     let (a, b) = tokio::join!(buy(), buy());
     let mut statuses = [a.0, b.0];
@@ -468,7 +469,7 @@ async fn scratching_gives_xp_achievements_and_levels() {
     let name = unique("xp");
     let me = register_fresh(&app, &name, "UTC").await;
     set_quests(&name, &[]).await;
-    set_xp(&name, 95).await;
+    set_xp(&name, levels::xp_for(2) - 5).await;
     let prize = json!({ "kind": "coins", "amount": 50 });
     let id = known_ticket(&name, "lucky_three", json!({ "cells": vec!["clover"; 9], "win": "clover" }), prize).await;
     let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
@@ -846,30 +847,42 @@ async fn two_digs_at_once_take_turns() {
 }
 
 #[actix_web::test]
-async fn new_series_open_with_levels() {
+async fn shop_tiers_open_with_levels_and_list_cheapest_first() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("lvl");
     let me = register(&app, &name, "UTC").await;
+    set_coins(&name, 5000).await;
     let buy =
         |series: &'static str| post_json(&app, "/api/shop/buy", &me, json!({ "kind": "ticket", "series": series }));
-    assert_eq!(buy("high_card").await.0, 409, "level 2");
-    set_xp(&name, 100).await;
-    let (status, body) = buy("high_card").await;
-    assert_eq!((status, body["ticket"]["series"].as_str()), (200, Some("high_card")));
-    assert_eq!(buy("treasure_dig").await.0, 409, "level 6");
-    set_xp(&name, 1500).await;
-    set_coins(&name, 1000).await;
+    assert_eq!(buy("high_card").await.0, 200, "tier 1 is open from the start");
+    assert_eq!(buy("bingo").await.0, 409, "tier 2 opens at level 3");
+    set_xp(&name, levels::xp_for(3)).await;
+    let (status, body) = buy("bingo").await;
+    assert_eq!(
+        (status, body["ticket"]["series"].as_str(), body["ticket"]["tier"].as_i64()),
+        (200, Some("bingo"), Some(2))
+    );
+    assert_eq!(buy("treasure_dig").await.0, 409, "tier 3 opens at level 6");
+    set_xp(&name, levels::xp_for(6)).await;
     let (status, body) = buy("treasure_dig").await;
     assert_eq!((status, body["ticket"]["series"].as_str()), (200, Some("treasure_dig")));
+
     let (_, shop) = get(&app, "/api/shop", &me).await;
-    let levels: Vec<(String, i64)> = shop["tickets"]
+    let offers: Vec<(String, i64, i64, i64)> = shop["tickets"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|t| (t["series"].as_str().unwrap().to_owned(), t["level"].as_i64().unwrap()))
+        .map(|t| {
+            let n = |k: &str| t[k].as_i64().unwrap();
+            (t["series"].as_str().unwrap().to_owned(), n("tier"), n("price"), n("level"))
+        })
         .collect();
-    assert!(levels.contains(&("bingo".into(), 4)) && levels.contains(&("lucky_reels".into(), 2)));
+    assert!(offers.iter().all(|(s, ..)| s != "pot_ticket"), "the pot is entered from the lobby");
+    assert!(offers.windows(2).all(|w| (w[0].1, w[0].2) <= (w[1].1, w[1].2)), "tier by tier, cheapest first");
+    assert!(offers.iter().all(|(_, tier, _, level)| *level == [1, 3, 6][*tier as usize - 1]));
+    // Still sold, from the pot card
+    assert_eq!(buy("pot_ticket").await.0, 200);
 }
 
 #[actix_web::test]
@@ -956,6 +969,56 @@ async fn played_tickets_go_move_by_move() {
 }
 
 #[actix_web::test]
+async fn coin_flip_roulette_and_battleship_are_played_by_choice() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("choice");
+    let me = register(&app, &name, "UTC").await;
+    let nothing = json!({ "kind": "nothing" });
+
+    // Coin Flip: the call is the scratched cell; the bet under it is what it pays
+    let id = known_ticket(&name, "coin_flip", json!({ "bets": [50, 250], "flip": "tails" }), nothing.clone()).await;
+    let uri = format!("/api/tickets/{id}/play");
+    let (_, look) = get(&app, &uri, &me).await;
+    assert_eq!(look["view"], json!({}), "the bets stay hidden");
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "side": "tails" } })).await;
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 250 }));
+    assert_eq!(body["view"]["bets"], json!([50, 250]));
+
+    // Roulette: 0 is green
+    let id = known_ticket(&name, "roulette", json!({ "bets": [140, 170, 2500], "pocket": 0 }), nothing.clone()).await;
+    let uri = format!("/api/tickets/{id}/play");
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "colour": "red" } })).await;
+    assert_eq!(body["done"]["prize"], nothing);
+    assert_eq!((body["view"]["colour"].as_str(), body["view"]["pocket"].as_i64()), (Some("green"), Some(0)));
+
+    // Battleship: shot by shot, ships hidden until sunk
+    let sea = json!({ "ships": [
+        { "cells": [0, 1, 2], "coins": 15 }, { "cells": [10, 15], "coins": 5 }, { "cells": [23, 24], "coins": 5 }
+    ] });
+    let id = known_ticket(&name, "battleship", sea, nothing).await;
+    let uri = format!("/api/tickets/{id}/play");
+    let (status, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!((status, body["error"].as_str()), (422, Some("played_ticket")));
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "cell": 0 } })).await;
+    assert_eq!(body["view"]["shots"], json!([{ "cell": 0, "hit": true }]));
+    assert_eq!(body["view"]["ships"], json!([]));
+    for cell in [1, 2] {
+        post_json(&app, &uri, &me, json!({ "move": { "cell": cell } })).await;
+    }
+    let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "cell": 5 } })).await;
+    assert_eq!(body["view"]["sunk"], 1);
+    assert_eq!(body["view"]["coins"], 3 * 15 + 15);
+    let mut done = Value::Null;
+    for cell in [6, 7, 8, 9, 11, 12] {
+        let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "cell": cell } })).await;
+        done = body["done"].clone();
+    }
+    assert_eq!(done["prize"], json!({ "kind": "coins", "amount": 60 }), "ten shots: three hits and a sunk ship");
+    assert_eq!(done["layout"]["ships"].as_array().unwrap().len(), 3);
+}
+
+#[actix_web::test]
 async fn rocket_pays_what_the_server_measured() {
     let Some(state) = state().await else { return };
     let app = app!(state);
@@ -1018,6 +1081,7 @@ async fn seasonal_tickets_are_sold_in_season_only() {
     let app = app!(state);
     let name = unique("season");
     let me = register(&app, &name, "UTC").await;
+    set_xp(&name, levels::xp_for(3)).await;
     let (_, shop) = get(&app, "/api/shop", &me).await;
     let sold: Vec<&str> = shop["tickets"].as_array().unwrap().iter().map(|t| t["series"].as_str().unwrap()).collect();
     let today = chrono::Utc::now().date_naive();
@@ -1419,7 +1483,7 @@ async fn metrics_count_what_players_do_behind_a_token() {
     let name = unique("metered");
     let me = register(&app, &name, "UTC").await;
     post(&app, "/api/pocket/claim", &me).await;
-    set_xp(&name, 1500).await;
+    set_xp(&name, levels::xp_for(6)).await;
     let charm = |kind: &str| json!({ "kind": "charm", "charm": { "kind": kind, "tier": "bronze" } });
     post_json(&app, "/api/shop/buy", &me, charm("payout")).await;
     let won = known_ticket(
@@ -1489,7 +1553,7 @@ async fn charms_discount_redraw_and_add_while_they_last() {
     };
     let (status, body) = buy("discount", "bronze").await;
     assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")));
-    set_xp(&name, 1500).await;
+    set_xp(&name, levels::xp_for(6)).await;
     let (_, shop) = get(&app, "/api/shop", &me).await;
     assert_eq!(shop["charms"].as_array().unwrap().len(), 9);
 
@@ -1560,7 +1624,7 @@ async fn one_charm_of_a_kind_even_bought_at_once() {
     let name = unique("charm2");
     let me = register(&app, &name, "UTC").await;
     set_coins(&name, 1_000).await;
-    set_xp(&name, 1500).await;
+    set_xp(&name, levels::xp_for(6)).await;
     let buy = || {
         post_json(&app, "/api/shop/buy", &me, json!({ "kind": "charm", "charm": { "kind": "luck", "tier": "silver" } }))
     };

@@ -130,10 +130,10 @@ impl Charm {
         match (self.kind, self.tier) {
             (Kind::Discount, Tier::Bronze) => 40,
             (Kind::Discount, Tier::Silver) => 210,
-            (Kind::Discount, Tier::Gold) => 1_100,
+            (Kind::Discount, Tier::Gold) => 1_350,
             (Kind::Luck | Kind::Payout, Tier::Bronze) => 50,
             (Kind::Luck | Kind::Payout, Tier::Silver) => 260,
-            (Kind::Luck | Kind::Payout, Tier::Gold) => 1_300,
+            (Kind::Luck | Kind::Payout, Tier::Gold) => 1_600,
         }
     }
 

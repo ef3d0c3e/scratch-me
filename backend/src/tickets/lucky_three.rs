@@ -38,6 +38,16 @@ pub const WINS: [(Symbol, u32, Prize); 5] = [
     (Symbol::Hourglass, 200, Prize::PocketRefill),
 ];
 
+/// Platinum Three: the same grid for the top tier, with a richer table
+pub const PLATINUM_PRICE: i64 = 500;
+pub const PLATINUM_WINS: [(Symbol, u32, Prize); 5] = [
+    (Symbol::Gem, 100, Prize::Coins { amount: 20_000 }),
+    (Symbol::Coin, 800, Prize::Coins { amount: 1500 }),
+    (Symbol::Clover, 2000, Prize::Coins { amount: 300 }),
+    (Symbol::Ticket, 600, Prize::Ticket { series: Series::CashWheel }),
+    (Symbol::Hourglass, 300, Prize::PocketRefill),
+];
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Layout {
     /// Row by row
@@ -47,9 +57,17 @@ pub struct Layout {
 }
 
 pub fn draw(rng: &mut impl Rng) -> Drawn {
+    draw_from(&WINS, rng)
+}
+
+pub fn draw_platinum(rng: &mut impl Rng) -> Drawn {
+    draw_from(&PLATINUM_WINS, rng)
+}
+
+fn draw_from(wins: &[(Symbol, u32, Prize)], rng: &mut impl Rng) -> Drawn {
     let roll = rng.random_range(0..OUT_OF);
     let mut acc = 0;
-    let win = WINS.iter().find(|(_, w, _)| {
+    let win = wins.iter().find(|(_, w, _)| {
         acc += w;
         roll < acc
     });
@@ -112,6 +130,8 @@ mod tests {
     fn star_never_wins() {
         assert!(WINS.iter().all(|(s, _, _)| *s != Symbol::Star));
         assert!(WINS.iter().map(|(_, w, _)| w).sum::<u32>() < OUT_OF);
+        assert!(PLATINUM_WINS.iter().all(|(s, _, _)| *s != Symbol::Star));
+        assert!(PLATINUM_WINS.iter().map(|(_, w, _)| w).sum::<u32>() < OUT_OF);
     }
 
     /// Bought tickets return 70–90 % of their price on average (game design)

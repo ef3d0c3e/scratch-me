@@ -219,6 +219,7 @@
 			/>
 		{:else if ScratchFace}
 			<ScratchFace
+				series={ticket.series}
 				layout={result?.layout ?? null}
 				{revealed}
 				foil={cover}

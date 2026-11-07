@@ -1,15 +1,19 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
-	import type { ReelSymbol, ReelsLayout } from '#lib/types.ts';
+	import type { ReelSymbol, ReelsLayout, Series } from '#lib/types.ts';
 
 	interface Props {
 		layout: ReelsLayout | null;
 		revealed: boolean;
 		foil: Snippet;
 		onsettled: () => void;
+		/** Mega Reels: four rows, eight lines, a richer table */
+		series?: Series;
 	}
-	let { layout, revealed, foil, onsettled }: Props = $props();
+	let { layout, revealed, foil, onsettled, series = 'lucky_reels' }: Props = $props();
+	const mega = $derived(series === 'mega_reels');
+	const rows = $derived(mega ? 4 : 3);
 	const i18n = getI18n();
 	$effect(() => {
 		if (revealed && layout) onsettled();
@@ -23,6 +27,16 @@
 		[0, 1, 2],
 		[2, 1, 0]
 	];
+	const MEGA_LINES = [
+		[0, 0, 0],
+		[1, 1, 1],
+		[2, 2, 2],
+		[3, 3, 3],
+		[0, 1, 2],
+		[1, 2, 3],
+		[2, 1, 0],
+		[3, 2, 1]
+	];
 	const PAYS: [ReelSymbol, number][] = [
 		['seven', 10000],
 		['bar', 1000],
@@ -30,8 +44,17 @@
 		['lemon', 120],
 		['cherry', 60]
 	];
+	const MEGA_PAYS: [ReelSymbol, number][] = [
+		['seven', 25000],
+		['bar', 2500],
+		['bell', 800],
+		['lemon', 300],
+		['cherry', 160]
+	];
+	const lines = $derived(mega ? MEGA_LINES : LINES);
+	const pays = $derived(mega ? MEGA_PAYS : PAYS);
 	const lit = (reel: number, row: number) =>
-		revealed && !!layout?.lines.some((l) => LINES[l][reel] === row);
+		revealed && !!layout?.lines.some((l) => lines[l][reel] === row);
 </script>
 
 {#snippet sym(s: ReelSymbol)}
@@ -82,12 +105,12 @@
 	{/if}
 {/snippet}
 
-<p class="rules">{i18n.t('series.lucky_reels.rules')}</p>
-<div class="play machine">
-	<div class="reels">
+<p class="rules">{i18n.t(`series.${mega ? 'mega_reels' : 'lucky_reels'}.rules`)}</p>
+<div class="play machine" class:tall={mega}>
+	<div class="reels" style:--rows={rows}>
 		{#each { length: 3 }, r (r)}
 			<div class="reel">
-				{#each { length: 3 }, row (row)}
+				{#each { length: rows }, row (row)}
 					{@const s = layout?.reels[r]?.[row]}
 					<div class="cell" class:lit={lit(r, row)} data-lit={lit(r, row) ? '' : undefined}>
 						{#if s}{@render sym(s)}{/if}
@@ -99,12 +122,16 @@
 	{@render foil()}
 </div>
 <ul class="paytable" aria-label={i18n.t('paytable.title')}>
-	{#each PAYS as [s, coins] (s)}
+	{#each pays as [s, coins] (s)}
 		<li><span class="mini">{@render sym(s)}</span>×3 = {i18n.num(coins)}</li>
 	{/each}
 </ul>
 
 <style>
+	/* Four rows stand taller */
+	.play.tall {
+		aspect-ratio: 1 / 1.15;
+	}
 	.reels {
 		height: 100%;
 		display: grid;
@@ -116,7 +143,7 @@
 	}
 	.reel {
 		display: grid;
-		grid-template-rows: repeat(3, 1fr);
+		grid-template-rows: repeat(var(--rows, 3), 1fr);
 		gap: 4px;
 		border-radius: 10px;
 		background: linear-gradient(#ddd 0%, #fff 30%, #fff 70%, #ddd 100%);

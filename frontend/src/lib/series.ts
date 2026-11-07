@@ -30,7 +30,12 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	pumpkin_patch: { edge: '#f97316', ink: '#9a3412', shadow: '#431407' },
 	snowball: { edge: '#7dd3fc', ink: '#0369a1', shadow: '#082f49' },
 	pot_ticket: { edge: '#facc15', ink: '#a16207', shadow: '#422006' },
-	duel: { edge: '#e11d48', ink: '#9f1239', shadow: '#4c0519' }
+	duel: { edge: '#e11d48', ink: '#9f1239', shadow: '#4c0519' },
+	coin_flip: { edge: '#f59e0b', ink: '#b45309', shadow: '#451a03' },
+	roulette: { edge: '#dc2626', ink: '#991b1b', shadow: '#1b1530' },
+	poker_hand: { edge: '#059669', ink: '#065f46', shadow: '#022c22' },
+	mega_reels: { edge: '#f97316', ink: '#9a3412', shadow: '#3b1300' },
+	platinum_three: { edge: '#a5b4fc', ink: '#4338ca', shadow: '#1e1b4b' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -56,7 +61,8 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	rocket: { cols: 1, rows: 1 },
 	blackjack: { cols: 1, rows: 4 },
 	hot_spot: { cols: 5, rows: 4 },
-	battleship: { cols: 3, rows: 3 },
+	/** Each cell of the sea has its own little foil */
+	battleship: { cols: 1, rows: 1 },
 	board_walk: { cols: 3, rows: 1 },
 	fishing: { cols: 4, rows: 1 },
 	word_bank: { cols: 6, rows: 2 },
@@ -65,7 +71,13 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	snowball: { cols: 5, rows: 1 },
 	pot_ticket: { cols: 1, rows: 1 },
 	/** Both rows of dice */
-	duel: { cols: 3, rows: 2 }
+	duel: { cols: 3, rows: 2 },
+	/** Each cell has its own foil: scratching one is the call */
+	coin_flip: { cols: 1, rows: 1 },
+	roulette: { cols: 1, rows: 1 },
+	poker_hand: { cols: 5, rows: 1 },
+	mega_reels: { cols: 3, rows: 1 },
+	platinum_three: { cols: 3, rows: 3 }
 };
 
 /** Series played move by move, not scratched all at once */
@@ -75,7 +87,10 @@ export const PLAYED: Series[] = [
 	'safe_cracker',
 	'mystery_boxes',
 	'defuse_bomb',
-	'rocket'
+	'rocket',
+	'battleship',
+	'coin_flip',
+	'roulette'
 ];
 export const isPlayed = (s: Series) => PLAYED.includes(s);
 

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { GRIDS, giveTicket, newPlayer, setCoins, setXp, visit } from './helpers';
+import { GRIDS, giveTicket, newPlayer, setCoins, setLevel, visit } from './helpers';
 
 test('charms wait for a level', async ({ page }) => {
 	await newPlayer(page);
@@ -12,7 +12,7 @@ test('charms wait for a level', async ({ page }) => {
 
 test('a bargain charm takes its share off tickets until its uses run out', async ({ page }) => {
 	const name = await newPlayer(page);
-	await setXp(name, 1500);
+	await setLevel(name, 6);
 	await setCoins(name, 2000);
 	await visit(page, '/shop');
 	await page.getByRole('button', { name: 'Buy Bronze Bargain charm' }).click();
@@ -39,11 +39,11 @@ test('a bargain charm takes its share off tickets until its uses run out', async
 
 test('a Midas charm adds to the coins a ticket pays', async ({ page }) => {
 	const name = await newPlayer(page);
-	await setXp(name, 1500);
+	await setLevel(name, 6);
 	await setCoins(name, 2000);
 	await visit(page, '/shop');
 	await page.getByRole('button', { name: 'Buy Gold Midas charm' }).click();
-	await expect(page.getByTestId('coins')).toHaveText('700');
+	await expect(page.getByTestId('coins')).toHaveText('400');
 	await giveTicket(name, { kind: 'coins', amount: 100 }, GRIDS.coin, 'coin');
 	await visit(page, '/');
 	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
@@ -51,6 +51,6 @@ test('a Midas charm adds to the coins a ticket pays', async ({ page }) => {
 	await sheet.getByRole('button', { name: 'Reveal all' }).click();
 	await expect(sheet.getByText('💰 +30 coins from your charm')).toBeVisible();
 	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
-	await expect(page.getByTestId('coins')).toHaveText('830');
+	await expect(page.getByTestId('coins')).toHaveText('530');
 	await expect(page.getByRole('region', { name: 'Charms on' })).toContainText('11 uses left');
 });

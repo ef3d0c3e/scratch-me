@@ -70,8 +70,16 @@ fn run<G: Game>(
 }
 
 /// The games played through this protocol (`dispatch` must handle each)
-pub const GAMES: &[Series] =
-    &[Series::PushLuck, Series::SafeCracker, Series::MysteryBoxes, Series::DefuseBomb, Series::Rocket];
+pub const GAMES: &[Series] = &[
+    Series::PushLuck,
+    Series::SafeCracker,
+    Series::MysteryBoxes,
+    Series::DefuseBomb,
+    Series::Rocket,
+    Series::Battleship,
+    Series::CoinFlip,
+    Series::Roulette,
+];
 
 pub fn handles(series: Series) -> bool {
     GAMES.contains(&series)
@@ -91,6 +99,9 @@ pub fn dispatch(
         Series::MysteryBoxes => run::<super::mystery_boxes::MysteryBoxes>(layout, state, mv, now),
         Series::DefuseBomb => run::<super::bomb::Bomb>(layout, state, mv, now),
         Series::Rocket => run::<super::rocket::Rocket>(layout, state, mv, now),
+        Series::Battleship => run::<super::battleship::Battleship>(layout, state, mv, now),
+        Series::CoinFlip => run::<super::coin_flip::CoinFlip>(layout, state, mv, now),
+        Series::Roulette => run::<super::roulette::Roulette>(layout, state, mv, now),
         _ => return None,
     })
 }

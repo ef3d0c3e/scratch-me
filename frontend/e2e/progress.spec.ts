@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { GRIDS, giveTicket, newPlayer, setQuests, setXp, sql, visit } from './helpers';
+import { GRIDS, giveTicket, newPlayer, setQuests, setXp, sql, visit, xpFor } from './helpers';
 
 test('a first win earns achievements and a level, announced', async ({ page }) => {
 	const name = await newPlayer(page, { fresh: true });
 	await setQuests(name, []);
-	await setXp(name, 95);
+	await setXp(name, xpFor(2) - 5);
 	await giveTicket(name, { kind: 'coins', amount: 200 }, GRIDS.coin, 'coin');
 	await visit(page, '/');
 	await expect(page.getByTestId('level')).toHaveAttribute('data-level', '1');

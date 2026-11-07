@@ -19,7 +19,7 @@ use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
 use crate::tickets::{Prize, Series, Source};
 
 /// An unscratched ticket, as the player sees it: no layout, no prize
-#[derive(Debug, Clone, Serialize, Queryable)]
+#[derive(Debug, Clone, Queryable)]
 pub struct TicketDto {
     pub id: i64,
     pub series: String,
@@ -27,6 +27,30 @@ pub struct TicketDto {
     pub created_at: DateTime<Utc>,
     /// Who sent it, for a gift
     pub from: Option<String>,
+}
+
+/// Sent with its tier, which comes from the series
+impl Serialize for TicketDto {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Out<'a> {
+            id: i64,
+            series: &'a str,
+            source: &'a str,
+            created_at: DateTime<Utc>,
+            from: &'a Option<String>,
+            tier: Option<u8>,
+        }
+        Out {
+            id: self.id,
+            series: &self.series,
+            source: &self.source,
+            created_at: self.created_at,
+            from: &self.from,
+            tier: Series::parse(&self.series).and_then(Series::tier),
+        }
+        .serialize(s)
+    }
 }
 
 /// Draws `n` tickets of `series` and gives them to the player

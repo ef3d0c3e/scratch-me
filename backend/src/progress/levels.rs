@@ -42,27 +42,12 @@ pub fn reward(level: i32) -> Prize {
     }
 }
 
-/// The level a series needs in the shop
+/// The level each shop tier opens at
+pub const TIER_LEVELS: [i32; 3] = [1, 3, 6];
+
+/// The level a series needs in the shop: its tier's
 pub fn shop_level(series: Series) -> i32 {
-    match series {
-        Series::HighCard
-        | Series::LuckyReels
-        | Series::LuckyDice
-        | Series::PushLuck
-        | Series::Battleship
-        | Series::HotSpot
-        | Series::WordBank => 2,
-        Series::NumberMatch
-        | Series::Derby
-        | Series::Rocket
-        | Series::Blackjack
-        | Series::Fishing
-        | Series::WordSearch => 3,
-        Series::Bingo | Series::MysteryBoxes | Series::DefuseBomb => 4,
-        Series::CashWheel | Series::Plinko | Series::SafeCracker => 5,
-        Series::TreasureDig => 6,
-        _ => 1,
-    }
+    series.tier().map_or(1, |t| TIER_LEVELS[t as usize - 1])
 }
 
 #[cfg(test)]

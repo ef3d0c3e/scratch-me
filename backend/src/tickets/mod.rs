@@ -16,6 +16,7 @@ pub mod board_walk;
 pub mod bomb;
 pub mod bonus;
 pub mod cash_wheel;
+pub mod coin_flip;
 pub mod derby;
 pub mod duel;
 pub mod fishing;
@@ -29,10 +30,12 @@ pub mod mystery_boxes;
 pub mod number_match;
 pub mod play;
 pub mod plinko;
+pub mod poker_hand;
 pub mod pot_ticket;
 pub mod pumpkin_patch;
 pub mod push_luck;
 pub mod rocket;
+pub mod roulette;
 pub mod safe_cracker;
 pub mod snowball;
 pub mod tic_tac_toe;
@@ -74,36 +77,46 @@ pub enum Series {
     Snowball,
     PotTicket,
     Duel,
+    CoinFlip,
+    Roulette,
+    PokerHand,
+    MegaReels,
+    PlatinumThree,
 }
 
 impl Series {
-    pub const ALL: [Series; 29] = [
-        Series::PotTicket,
-        Series::PumpkinPatch,
-        Series::Snowball,
+    pub const ALL: [Series; 34] = [
         Series::LuckyThree,
-        Series::BoardWalk,
         Series::TicTacToe,
+        Series::BoardWalk,
+        Series::CoinFlip,
         Series::LuckyDice,
         Series::HighCard,
+        Series::Blackjack,
+        Series::LuckyReels,
+        Series::PushLuck,
+        Series::Snowball,
         Series::HotSpot,
         Series::Battleship,
+        Series::PumpkinPatch,
         Series::WordBank,
-        Series::LuckyReels,
-        Series::Bingo,
-        Series::NumberMatch,
-        Series::Blackjack,
+        Series::Derby,
         Series::Fishing,
         Series::WordSearch,
-        Series::Derby,
-        Series::Plinko,
-        Series::CashWheel,
-        Series::TreasureDig,
-        Series::PushLuck,
+        Series::Bingo,
         Series::Rocket,
+        Series::Roulette,
+        Series::PokerHand,
+        Series::Plinko,
+        Series::NumberMatch,
         Series::DefuseBomb,
+        Series::MegaReels,
         Series::MysteryBoxes,
         Series::SafeCracker,
+        Series::TreasureDig,
+        Series::CashWheel,
+        Series::PlatinumThree,
+        Series::PotTicket,
         Series::TicketChain,
         Series::Golden,
         Series::Duel,
@@ -141,6 +154,11 @@ impl Series {
             Series::Snowball => "snowball",
             Series::PotTicket => "pot_ticket",
             Series::Duel => "duel",
+            Series::CoinFlip => "coin_flip",
+            Series::Roulette => "roulette",
+            Series::PokerHand => "poker_hand",
+            Series::MegaReels => "mega_reels",
+            Series::PlatinumThree => "platinum_three",
         }
     }
 
@@ -177,8 +195,35 @@ impl Series {
             Series::PumpkinPatch => Some(pumpkin_patch::PRICE),
             Series::Snowball => Some(snowball::PRICE),
             Series::PotTicket => Some(pot_ticket::PRICE),
+            Series::CoinFlip => Some(coin_flip::PRICE),
+            Series::Roulette => Some(roulette::PRICE),
+            Series::PokerHand => Some(poker_hand::PRICE),
+            Series::MegaReels => Some(lucky_reels::MEGA_PRICE),
+            Series::PlatinumThree => Some(lucky_three::PLATINUM_PRICE),
             Series::TicketChain | Series::Golden | Series::Duel => None,
         }
+    }
+
+    /// Listed in the shop's tier tabs. The Pot Ticket has a price but is
+    /// entered from the lobby's pot card, not the shop.
+    pub fn in_shop(self) -> bool {
+        self.price().is_some() && self != Series::PotTicket
+    }
+
+    /// The shop tier, 1 to 3: cost and payout grow with it. None for tickets
+    /// not in the shop.
+    pub fn tier(self) -> Option<u8> {
+        if !self.in_shop() {
+            return None;
+        }
+        let price = self.price()?;
+        Some(if price <= 60 {
+            1
+        } else if price <= 150 {
+            2
+        } else {
+            3
+        })
     }
 
     /// Draws a ticket of this series, with a bonus box now and then
@@ -218,6 +263,11 @@ impl Series {
             Series::Snowball => snowball::draw(rng),
             Series::PotTicket => pot_ticket::draw(rng),
             Series::Duel => duel::draw(rng),
+            Series::CoinFlip => coin_flip::draw(rng),
+            Series::Roulette => roulette::draw(rng),
+            Series::PokerHand => poker_hand::draw(rng),
+            Series::MegaReels => lucky_reels::draw_mega(rng),
+            Series::PlatinumThree => lucky_three::draw_platinum(rng),
         }
     }
 
@@ -429,6 +479,25 @@ mod tests {
             let ratio = measured_value(s, 60_000, &mut rng) / price as f64;
             assert!((0.68..=0.92).contains(&ratio), "{} pays back {ratio:.2} of its price", s.key());
         }
+    }
+
+    /// Tiers rise with the price, and every shop ticket has one
+    #[test]
+    fn tiers_follow_the_price() {
+        let shop: Vec<Series> = Series::ALL.into_iter().filter(|s| s.in_shop()).collect();
+        assert!(shop.iter().all(|s| s.tier().is_some()));
+        for a in &shop {
+            for b in &shop {
+                if a.tier() < b.tier() {
+                    assert!(a.price() < b.price(), "{} is in a lower tier than {} but costs as much", a.key(), b.key());
+                }
+            }
+        }
+        for t in 1..=3 {
+            assert!(shop.iter().filter(|s| s.tier() == Some(t)).count() >= 6, "tier {t} has a choice");
+        }
+        assert_eq!(Series::PotTicket.tier(), None, "entered from the lobby");
+        assert!(Series::PotTicket.price().is_some());
     }
 
     #[test]

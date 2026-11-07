@@ -49,6 +49,12 @@ export async function setXp(username: string, xp: number) {
 	await sql('UPDATE users SET xp = $2 WHERE username = $1', [username, xp]);
 }
 
+/** Experience at which a level starts: the server's curve (progress/levels.rs) */
+export const xpFor = (level: number) => 50 * level * (level - 1);
+
+/** Puts a player at the start of a level */
+export const setLevel = (username: string, level: number) => setXp(username, xpFor(level));
+
 /** Sets today's quests to these keys, with this much progress */
 export async function setQuests(username: string, quests: [string, number][]) {
 	await sql('DELETE FROM quests WHERE user_id = (SELECT id FROM users WHERE username = $1)', [

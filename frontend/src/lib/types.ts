@@ -29,7 +29,12 @@ export type Series =
 	| 'pot_ticket'
 	| 'duel'
 	| 'ticket_chain'
-	| 'golden';
+	| 'golden'
+	| 'coin_flip'
+	| 'roulette'
+	| 'poker_hand'
+	| 'mega_reels'
+	| 'platinum_three';
 export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel';
 
 export type ThemeId =
@@ -64,6 +69,8 @@ export interface TicketDto {
 	created_at: string;
 	/** Who sent it, for a gift */
 	from?: string | null;
+	/** Its shop tier, 1 to 3; none for tickets the shop does not sell */
+	tier?: number | null;
 }
 
 export interface Pocket {
@@ -259,7 +266,14 @@ export interface Scratched {
 
 export interface ShopDto {
 	/** `until`: a seasonal series' last day on sale, as [month, day] */
-	tickets: { series: Series; price: number; level: number; until: [number, number] | null }[];
+	tickets: {
+		series: Series;
+		price: number;
+		/** 1 to 3, listed tier by tier and cheapest first */
+		tier: number;
+		level: number;
+		until: [number, number] | null;
+	}[];
 	cosmetics: { item: Cosmetic; origin: Origin }[];
 	charms: CharmOffer[];
 }
@@ -414,10 +428,31 @@ export interface HotSpotLayout {
 	matches: number;
 }
 
-export interface BattleshipLayout {
-	ships: { cells: number[]; coins: number; sunk: boolean }[];
-	shots: number[];
-	hits: number;
+export type PokerRank =
+	| 'nothing'
+	| 'jacks_or_better'
+	| 'two_pair'
+	| 'three_of_a_kind'
+	| 'straight'
+	| 'flush'
+	| 'full_house'
+	| 'four_of_a_kind'
+	| 'straight_flush'
+	| 'royal_flush';
+
+export interface PokerLayout {
+	cards: PlayingCard[];
+	rank: PokerRank;
+}
+
+/** Battleship, as the server lets the player see it, shot by shot */
+export interface BattleshipView {
+	shots: { cell: number; hit: boolean }[];
+	left: number;
+	/** Sunk ships; the whole fleet once the game is over */
+	ships: { cells: number[]; coins: number }[];
+	sunk: number;
+	coins: number;
 }
 
 export interface BoardWalkLayout {

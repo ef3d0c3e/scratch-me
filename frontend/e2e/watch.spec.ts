@@ -45,25 +45,31 @@ test('Hot Spot counts the matches', async ({ page }) => {
 	await expect(sheet.locator('[data-tier]')).toHaveText('+80 coins!');
 });
 
-test('Battleship shows hits, misses and the ship sunk', async ({ page }) => {
+test('Poker Hand names the hand and pays it', async ({ page }) => {
 	const sheet = await open(
 		page,
-		'battleship',
+		'poker_hand',
 		{
-			ships: [
-				{ cells: [0, 1, 2], coins: 400, sunk: true },
-				{ cells: [10, 15], coins: 100, sunk: false },
-				{ cells: [23, 24], coins: 100, sunk: false }
-			],
-			shots: [0, 1, 2, 10, 5, 6, 7, 8, 9, 12],
-			hits: 4
+			cards: [c(4), { rank: 4, suit: 'hearts' }, c(11), { rank: 11, suit: 'clubs' }, c(2)],
+			rank: 'two_pair'
 		},
-		{ kind: 'coins', amount: 412 }
+		{ kind: 'coins', amount: 600 }
 	);
-	await expect(sheet.locator('[data-state="hit"]')).toHaveCount(4);
-	await expect(sheet.locator('[data-state="miss"]')).toHaveCount(6);
-	await expect(sheet.locator('[data-sunk]')).toHaveCount(1);
-	await expect(sheet.locator('[data-tier]')).toHaveText('+412 coins!');
+	await expect(sheet.locator('[data-rank="two_pair"]')).toHaveText('Two pair');
+	await expect(sheet.locator('[data-tier]')).toHaveText('+600 coins!');
+});
+
+test('Mega Reels light the lines on four rows', async ({ page }) => {
+	const reel = ['bell', 'cherry', 'lemon', 'cherry'];
+	const sheet = await open(
+		page,
+		'mega_reels',
+		{ reels: [reel, reel, reel], lines: [0, 1, 2, 3] },
+		{ kind: 'coins', amount: 1520 }
+	);
+	await expect(sheet.locator('.reel').first().locator('.cell')).toHaveCount(4);
+	await expect(sheet.locator('[data-lit]')).toHaveCount(12);
+	await expect(sheet.getByText('×3 = 25,000')).toBeVisible();
 });
 
 test('Board Walk walks the token, then pays the squares', async ({ page }) => {

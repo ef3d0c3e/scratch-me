@@ -30,7 +30,7 @@ pub fn pick(level: i32, today: NaiveDate, rng: &mut impl Rng) -> Series {
     let top = worth(level);
     let open: Vec<(Series, i64)> = Series::ALL
         .into_iter()
-        .filter(|s| *s != Series::PotTicket && levels::shop_level(*s) <= level && s.in_season(today))
+        .filter(|s| s.in_shop() && levels::shop_level(*s) <= level && s.in_season(today))
         .filter_map(|s| s.price().map(|p| (s, p)))
         .filter(|(_, p)| *p <= top && *p * 2 >= top)
         .collect();

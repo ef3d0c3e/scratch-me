@@ -22,6 +22,8 @@ use crate::tickets::{Series, Source};
 pub struct TicketOffer {
     pub series: Series,
     pub price: i64,
+    /// 1 to 3
+    pub tier: u8,
     /// The level it takes to buy it
     pub level: i32,
     /// A seasonal series: its last day on sale, as (month, day)
@@ -61,14 +63,21 @@ pub struct ShopDto {
 #[get("/shop")]
 pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
     let today = Utc::now().date_naive();
-    let tickets = Series::ALL.into_iter().filter(|s| s.in_season(today)).filter_map(|series| {
-        Some(TicketOffer {
-            series,
-            price: series.price()?,
-            level: levels::shop_level(series),
-            until: series.season().map(|(_, to)| to),
+    let mut tickets: Vec<TicketOffer> = Series::ALL
+        .into_iter()
+        .filter(|s| s.in_shop() && s.in_season(today))
+        .filter_map(|series| {
+            Some(TicketOffer {
+                series,
+                price: series.price()?,
+                tier: series.tier()?,
+                level: levels::shop_level(series),
+                until: series.season().map(|(_, to)| to),
+            })
         })
-    });
+        .collect();
+    // Tier by tier, cheapest first
+    tickets.sort_by_key(|t| (t.tier, t.price));
     let cosmetics = Cosmetic::all().into_iter().map(|item| CosmeticOffer { item, origin: item.origin() });
     let charms = Charm::all().into_iter().map(|charm| CharmOffer {
         charm,
@@ -79,7 +88,7 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
         minutes: charm.tier.lasts().num_minutes(),
         reach: charm.tier.reach(),
     });
-    web::Json(ShopDto { tickets: tickets.collect(), cosmetics: cosmetics.collect(), charms: charms.collect() })
+    web::Json(ShopDto { tickets, cosmetics: cosmetics.collect(), charms: charms.collect() })
 }
 
 #[derive(Debug, Deserialize)]
