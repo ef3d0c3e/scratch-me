@@ -111,10 +111,12 @@
 		margin: -4px 0 8px;
 		min-height: 1.4em;
 	}
+	/* Every cell the same size, whatever it shows: a foil, a hit, a miss */
 	.sea {
 		height: 100%;
 		display: grid;
-		grid-template-columns: repeat(5, 1fr);
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		grid-template-rows: repeat(5, minmax(0, 1fr));
 		gap: 4px;
 		padding: 8px;
 		border-radius: 14px;
@@ -122,6 +124,8 @@
 	}
 	.cell {
 		position: relative;
+		min-width: 0;
+		min-height: 0;
 		border-radius: 6px;
 		background: #3b82f6;
 		overflow: hidden;

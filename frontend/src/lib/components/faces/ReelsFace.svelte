@@ -130,12 +130,15 @@
 <style>
 	/* Four rows stand taller */
 	.play.tall {
-		aspect-ratio: 1 / 1.15;
+		/* The sheet sets every play area's shape: four rows need more height */
+		aspect-ratio: 1 / 1.2 !important;
 	}
 	.reels {
+		box-sizing: border-box;
 		height: 100%;
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-rows: minmax(0, 1fr);
 		gap: 6px;
 		padding: 8px;
 		border-radius: 14px;
@@ -143,7 +146,8 @@
 	}
 	.reel {
 		display: grid;
-		grid-template-rows: repeat(var(--rows, 3), 1fr);
+		grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
+		min-height: 0;
 		gap: 4px;
 		border-radius: 10px;
 		background: linear-gradient(#ddd 0%, #fff 30%, #fff 70%, #ddd 100%);
@@ -152,12 +156,15 @@
 	.cell {
 		display: grid;
 		place-items: center;
+		min-height: 0;
 		border-radius: 8px;
 		padding: 8%;
+		overflow: hidden;
 	}
 	.cell :global(svg) {
 		width: 100%;
 		height: 100%;
+		max-height: 100%;
 	}
 	.cell.lit {
 		background: #fff2b3;
