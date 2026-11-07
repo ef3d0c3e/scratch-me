@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
-	import { api } from '#lib/api.ts';
 	import type { FishingLayout } from '#lib/types.ts';
 
 	interface Props {
@@ -12,7 +11,8 @@
 	}
 	let { layout, revealed, foil, onsettled }: Props = $props();
 	const i18n = getI18n();
-	type Aquarium = { species: string[]; caught: string[] };
+	/** What the scratch put in the aquarium: the server says, as it decided it */
+	type Catch = { new: string[]; caught: number; of: number };
 	const LOOK: Record<string, string> = {
 		sardine: '🐟',
 		perch: '🐠',
@@ -27,25 +27,11 @@
 		octopus: '🐙',
 		golden_koi: '🎏'
 	};
-	/** The aquarium before this ticket: what is new shows as new */
-	let before = $state<Aquarium | null>(null);
-	onMount(() => {
-		api<Aquarium>('/aquarium')
-			.then((a) => (before = a))
-			.catch(() => {});
-	});
 	$effect(() => {
 		if (revealed && layout) onsettled();
 	});
-	const isNew = (f: string) => !!before && !before.caught.includes(f);
-	const total = $derived.by(() => {
-		if (!before || !layout) return 0;
-		const all = new Set([
-			...before.caught,
-			...layout.casts.flatMap((c) => (c.fish ? [c.fish] : []))
-		]);
-		return all.size;
-	});
+	const caught = $derived((layout as { aquarium?: Catch } | null)?.aquarium ?? null);
+	const isNew = (f: string) => !!caught?.new.includes(f);
 </script>
 
 <p class="rules">{i18n.t('series.fishing.rules')}</p>
@@ -66,9 +52,9 @@
 	</div>
 	{@render foil()}
 </div>
-{#if revealed && before}
+{#if revealed && caught}
 	<p class="aquarium" data-testid="aquarium">
-		🐠 {i18n.t('fish.aquarium', { n: total, of: before.species.length })}
+		🐠 {i18n.t('fish.aquarium', { n: caught.caught, of: caught.of })}
 	</p>
 {/if}
 

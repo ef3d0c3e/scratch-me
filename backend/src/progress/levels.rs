@@ -1,14 +1,18 @@
-//! Levels from experience. Each level takes 100 more than the one before:
-//! level 2 at 100 xp, 3 at 300, 4 at 600, 5 at 1,000…
+//! Levels from experience. Each level takes STEP more than the one before:
+//! level 2 at STEP xp, 3 at 3 × STEP, 4 at 6 × STEP… (`progress/pace.rs`
+//! checks what a first day reaches).
 
 use serde::Serialize;
 
 use crate::tickets::{Prize, Series};
 
+/// What level 2 takes, and each next level that much more than the last
+pub const STEP: i64 = 300;
+
 /// Experience at which `level` starts
 pub fn xp_for(level: i32) -> i64 {
     let l = level.max(1) as i64;
-    50 * l * (l - 1)
+    STEP / 2 * l * (l - 1)
 }
 
 pub fn level_for(xp: i64) -> i32 {
@@ -33,13 +37,9 @@ pub fn dto(xp: i64) -> LevelDto {
     LevelDto { level, xp, from: xp_for(level), to: xp_for(level + 1) }
 }
 
-/// What reaching `level` gives: a Golden Ticket every fifth level, a Number Match otherwise
-pub fn reward(level: i32) -> Prize {
-    if level % 5 == 0 {
-        Prize::Ticket { series: Series::Golden }
-    } else {
-        Prize::Ticket { series: Series::NumberMatch }
-    }
+/// What reaching a level gives: a Ticket Chain, always
+pub fn reward(_level: i32) -> Prize {
+    Prize::Ticket { series: Series::TicketChain }
 }
 
 /// The level each shop tier opens at
@@ -56,11 +56,12 @@ mod tests {
 
     #[test]
     fn curve() {
-        assert_eq!([xp_for(1), xp_for(2), xp_for(3), xp_for(5)], [0, 100, 300, 1000]);
+        assert_eq!([xp_for(1), xp_for(2), xp_for(3), xp_for(5)], [0, 300, 900, 3000]);
         assert_eq!(level_for(0), 1);
-        assert_eq!(level_for(99), 1);
-        assert_eq!(level_for(100), 2);
-        assert_eq!(level_for(1000), 5);
+        assert_eq!(level_for(299), 1);
+        assert_eq!(level_for(300), 2);
+        assert_eq!(level_for(3000), 5);
+        assert_eq!(level_for(xp_for(50)), 50);
         for xp in [0, 57, 300, 4499, 4500, 123_456] {
             let d = dto(xp);
             assert!(d.from <= xp && xp < d.to);
@@ -68,9 +69,9 @@ mod tests {
     }
 
     #[test]
-    fn every_fifth_level_is_golden() {
-        assert_eq!(reward(5), Prize::Ticket { series: Series::Golden });
-        assert_eq!(reward(10), Prize::Ticket { series: Series::Golden });
-        assert_eq!(reward(2), Prize::Ticket { series: Series::NumberMatch });
+    fn every_level_gives_a_chain() {
+        for l in [2, 5, 10, 50] {
+            assert_eq!(reward(l), Prize::Ticket { series: Series::TicketChain });
+        }
     }
 }

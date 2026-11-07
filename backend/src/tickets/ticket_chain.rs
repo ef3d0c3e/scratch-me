@@ -1,5 +1,6 @@
 //! Ticket Chain: six panels, each hiding a ticket or nothing. Every ticket
-//! found is won, and one of them can be another chain.
+//! found is won, and one of them can be another chain. A chain always holds
+//! at least two tickets.
 
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -9,8 +10,8 @@ use super::{Drawn, Prize, Series, weighted};
 
 pub const PANELS: usize = 6;
 
-/// How many tickets a chain holds, and how often
-const COUNTS: [(usize, u32); 5] = [(0, 30), (1, 40), (2, 20), (3, 8), (4, 2)];
+/// How many tickets a chain holds, and how often: never fewer than two
+const COUNTS: [(usize, u32); 4] = [(2, 60), (3, 28), (4, 10), (5, 2)];
 /// Which series each one is
 pub const FOUND: [(Series, u32); 19] = [
     (Series::LuckyThree, 260),
@@ -63,8 +64,8 @@ mod tests {
             let l: Layout = serde_json::from_value(d.layout).unwrap();
             assert_eq!(l.panels.len(), PANELS);
             let found: Vec<Series> = l.panels.iter().flatten().copied().collect();
+            assert!(found.len() >= 2, "at least two tickets");
             match d.prize {
-                Prize::Nothing => assert!(found.is_empty()),
                 Prize::Tickets { series } => assert_eq!(series, found),
                 p => panic!("unexpected prize {p:?}"),
             }

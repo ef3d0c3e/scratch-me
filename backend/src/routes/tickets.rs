@@ -314,7 +314,7 @@ pub async fn scratch(
             }
             seal_bonus(conn, uid, seal, &prize, &mut boost).await?;
             if kind == Series::Fishing {
-                record_catch(conn, uid, &layout).await?;
+                record_catch(conn, uid, &mut layout).await?;
             }
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
             let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra + boost.bonus + boost.seal));
@@ -598,14 +598,30 @@ pub async fn play_move(
 }
 
 /// Puts the fish a Fishing ticket brought up into the player's aquarium
-async fn record_catch(conn: &mut AsyncPgConnection, uid: i64, layout: &serde_json::Value) -> ApiResult<()> {
+/// Puts the catch in the aquarium, and tells the ticket which species are
+/// new and how full the aquarium is now: the face shows it as it was decided
+/// (asking the aquarium separately would race the scratch)
+async fn record_catch(conn: &mut AsyncPgConnection, uid: i64, layout: &mut serde_json::Value) -> ApiResult<()> {
     let rows: Vec<_> = crate::tickets::fishing::caught(layout)
         .into_iter()
         .map(|s| (aquarium::user_id.eq(uid), aquarium::species.eq(s)))
         .collect();
-    if !rows.is_empty() {
-        diesel::insert_into(aquarium::table).values(rows).on_conflict_do_nothing().execute(conn).await?;
-    }
+    let new: Vec<String> = if rows.is_empty() {
+        vec![]
+    } else {
+        diesel::insert_into(aquarium::table)
+            .values(rows)
+            .on_conflict_do_nothing()
+            .returning(aquarium::species)
+            .get_results(conn)
+            .await?
+    };
+    let caught: i64 = aquarium::table.filter(aquarium::user_id.eq(uid)).count().get_result(conn).await?;
+    layout["aquarium"] = serde_json::json!({
+        "new": new,
+        "caught": caught,
+        "of": crate::tickets::fishing::SPECIES.len(),
+    });
     Ok(())
 }
 

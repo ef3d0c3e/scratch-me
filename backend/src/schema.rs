@@ -85,9 +85,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    quest_days (user_id, day) {
+    quest_slots (user_id, slot) {
         user_id -> Int8,
-        day -> Date,
+        slot -> Timestamptz,
         rerolled -> Bool,
         bonus_at -> Nullable<Timestamptz>,
         bonuses -> Int4,
@@ -95,9 +95,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    quests (user_id, day, round, key) {
+    quests (user_id, slot, round, key) {
         user_id -> Int8,
-        day -> Date,
+        slot -> Timestamptz,
         key -> Text,
         progress -> Int4,
         done_at -> Nullable<Timestamptz>,
@@ -133,6 +133,8 @@ diesel::table! {
         wins -> Int4,
         best_win -> Int8,
         quests_done -> Int4,
+        coins_won -> Int8,
+        bundles -> Int4,
     }
 }
 
@@ -187,7 +189,7 @@ diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(aquarium -> users (user_id));
 diesel::joinable!(charms -> users (user_id));
 diesel::joinable!(cosmetics -> users (user_id));
-diesel::joinable!(quest_days -> users (user_id));
+diesel::joinable!(quest_slots -> users (user_id));
 diesel::joinable!(quests -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(pot_entries -> users (user_id));
@@ -206,7 +208,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     mutes,
     pot_entries,
     pots,
-    quest_days,
+    quest_slots,
     quests,
     sessions,
     shouts,

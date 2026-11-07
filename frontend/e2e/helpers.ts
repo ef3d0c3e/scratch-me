@@ -34,8 +34,8 @@ async function quiet(page: Page, name: string) {
 		name
 	]);
 	await sql(
-		`INSERT INTO quests (user_id, day, key)
-		 SELECT id, (now() AT TIME ZONE tz)::date, 'none' FROM users WHERE username = $1`,
+		`INSERT INTO quests (user_id, slot, key)
+		 SELECT id, date_trunc('hour', now()), 'none' FROM users WHERE username = $1`,
 		[name]
 	);
 	await sql(
@@ -50,7 +50,7 @@ export async function setXp(username: string, xp: number) {
 }
 
 /** Experience at which a level starts: the server's curve (progress/levels.rs) */
-export const xpFor = (level: number) => 50 * level * (level - 1);
+export const xpFor = (level: number) => 150 * level * (level - 1);
 
 /** Puts a player at the start of a level */
 export const setLevel = (username: string, level: number) => setXp(username, xpFor(level));
@@ -62,8 +62,8 @@ export async function setQuests(username: string, quests: [string, number][]) {
 	]);
 	for (const [key, progress] of quests)
 		await sql(
-			`INSERT INTO quests (user_id, day, key, progress)
-			 SELECT id, (now() AT TIME ZONE tz)::date, $2, $3 FROM users WHERE username = $1`,
+			`INSERT INTO quests (user_id, slot, key, progress)
+			 SELECT id, date_trunc('hour', now()), $2, $3 FROM users WHERE username = $1`,
 			[username, key, progress]
 		);
 }

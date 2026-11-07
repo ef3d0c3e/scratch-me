@@ -1,8 +1,9 @@
-//! Daily quests: three at a time from a pool, drawn from the player, the day
-//! and the round (so they stay put), only among those the player's level can
-//! do. Finishing a round's three opens three harder ones, up to `ROUNDS` a day.
+//! Quests by the hour: three at a time from a pool, drawn from the player, the
+//! hour and the round (so they stay put), only among those the player's level
+//! can do. Finishing a round's three opens three harder ones, up to `ROUNDS`
+//! an hour; on the hour, it all starts again.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 use rand::SeedableRng;
 use rand::seq::IndexedRandom;
 
@@ -20,8 +21,13 @@ pub struct Quest {
 /// Quests in a round
 pub const PER_DAY: usize = 3;
 
-/// Rounds a day: the first, and three harder ones
-pub const ROUNDS: i32 = 4;
+/// Rounds an hour: the first, and two harder ones
+pub const ROUNDS: i32 = 3;
+
+/// The hour `now` falls in: its start
+pub fn slot_of(now: DateTime<Utc>) -> DateTime<Utc> {
+    now.duration_trunc(TimeDelta::hours(1)).expect("an hour fits")
+}
 
 pub fn pool() -> Vec<Quest> {
     use Series::*;
@@ -31,16 +37,21 @@ pub fn pool() -> Vec<Quest> {
         q("win_3", 3, Prize::Ticket { series: LuckyThree }, 1),
         q("coins_300", 300, Prize::Ticket { series: NumberMatch }, 1),
         q("pocket", 1, Prize::Coins { amount: 50 }, 1),
-        q("envelope", 1, Prize::Coins { amount: 50 }, 1),
         q("buy", 1, Prize::Ticket { series: LuckyThree }, 1),
         q("shout", 1, Prize::Coins { amount: 50 }, 1),
         q("number_match", 1, Prize::Coins { amount: 120 }, 3),
-        q("cash_wheel", 1, Prize::Coins { amount: 200 }, 5),
+        q("cash_wheel", 1, Prize::Coins { amount: 200 }, 6),
     ]
 }
 
 /// A round's three done
 pub const BONUS: Prize = Prize::Ticket { series: Series::TicketChain };
+
+/// What finishing a round's three gives: a Lucky Three, and a Ticket Chain
+/// for the last round
+pub fn bonus(round: i32) -> Prize {
+    if round >= ROUNDS { BONUS } else { Prize::Ticket { series: Series::LuckyThree } }
+}
 
 impl Quest {
     /// Its goal in `round`: half the first round's again each round, rounded up
@@ -57,11 +68,6 @@ impl Quest {
             ref other => other.clone(),
         }
     }
-
-    /// Can come back in a later round: the envelope opens once a day
-    fn repeats(&self) -> bool {
-        self.key != "envelope"
-    }
 }
 
 pub fn quest(key: &str) -> Option<Quest> {
@@ -75,7 +81,6 @@ pub fn counts(key: &str, event: &Event) -> i32 {
         ("win_3", Event::Scratched(s)) if s.win => 1,
         ("coins_300", Event::Scratched(s)) => s.coins.min(i32::MAX as i64) as i32,
         ("pocket", Event::PocketTaken(n)) if *n > 0 => 1,
-        ("envelope", Event::EnvelopeOpened { .. }) => 1,
         ("buy", Event::Bought(_)) => 1,
         ("shout", Event::Shouted) => 1,
         ("number_match", Event::Scratched(s)) if s.series == Series::NumberMatch => 1,
@@ -84,34 +89,39 @@ pub fn counts(key: &str, event: &Event) -> i32 {
     }
 }
 
-fn rng(uid: i64, day: NaiveDate, salt: u64) -> rand::rngs::StdRng {
-    let seed = (uid as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (day.num_days_from_ce() as u64) ^ salt;
+fn rng(uid: i64, slot: DateTime<Utc>, salt: u64) -> rand::rngs::StdRng {
+    let hour = slot.timestamp().div_euclid(3600) as u64;
+    let seed = (uid as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ hour.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ salt;
     rand::rngs::StdRng::seed_from_u64(seed)
 }
 
-/// Whether a player can take a quest: its level, no chat for guests, and
-/// after the first round only those that can be done again
-fn open_to(q: &Quest, round: i32, level: i32, guest: bool) -> bool {
-    q.min_level <= level && !(guest && q.key == "shout") && (round <= 1 || q.repeats())
+/// Whether a player can take a quest: its level, and no chat for guests
+fn open_to(q: &Quest, level: i32, guest: bool) -> bool {
+    q.min_level <= level && !(guest && q.key == "shout")
 }
 
 /// A round's three for a player at `level`
-pub fn draw(uid: i64, day: NaiveDate, round: i32, level: i32, guest: bool) -> Vec<&'static str> {
-    let open: Vec<&'static str> =
-        pool().into_iter().filter(|q| open_to(q, round, level, guest)).map(|q| q.key).collect();
-    // Round 1 keeps the salt it always had: today's quests do not move
+pub fn draw(uid: i64, slot: DateTime<Utc>, round: i32, level: i32, guest: bool) -> Vec<&'static str> {
+    let open: Vec<&'static str> = pool().into_iter().filter(|q| open_to(q, level, guest)).map(|q| q.key).collect();
     let salt = (round.max(1) as u64 - 1).wrapping_mul(0x5851_F42D);
-    open.choose_multiple(&mut rng(uid, day, salt), PER_DAY).copied().collect()
+    open.choose_multiple(&mut rng(uid, slot, salt), PER_DAY).copied().collect()
 }
 
 /// A replacement for a rerolled quest: one the player does not have in this round
-pub fn reroll(uid: i64, day: NaiveDate, round: i32, level: i32, guest: bool, have: &[String]) -> Option<&'static str> {
+pub fn reroll(
+    uid: i64,
+    slot: DateTime<Utc>,
+    round: i32,
+    level: i32,
+    guest: bool,
+    have: &[String],
+) -> Option<&'static str> {
     let open: Vec<&'static str> = pool()
         .into_iter()
-        .filter(|q| open_to(q, round, level, guest) && !have.iter().any(|h| h == q.key))
+        .filter(|q| open_to(q, level, guest) && !have.iter().any(|h| h == q.key))
         .map(|q| q.key)
         .collect();
-    open.choose(&mut rng(uid, day, 0xA5A5 ^ (round.max(1) as u64 - 1))).copied()
+    open.choose(&mut rng(uid, slot, 0xA5A5 ^ (round.max(1) as u64 - 1))).copied()
 }
 
 #[cfg(test)]
@@ -119,20 +129,20 @@ mod tests {
     use super::super::events::Scratch;
     use super::*;
 
-    fn d(s: &str) -> NaiveDate {
-        s.parse().unwrap()
+    fn d(s: &str) -> DateTime<Utc> {
+        slot_of(format!("{s}T10:20:00Z").parse().unwrap())
     }
 
     #[test]
-    fn three_a_day_steady_within_the_day_and_varied() {
+    fn three_an_hour_steady_within_the_hour_and_varied() {
         let a = draw(7, d("2026-11-06"), 1, 1, false);
         assert_eq!(a.len(), PER_DAY);
         assert_eq!(a, draw(7, d("2026-11-06"), 1, 1, false));
         let mut days = std::collections::HashSet::new();
         for i in 0..20 {
-            days.insert(draw(7, d("2026-11-06") + chrono::Days::new(i), 1, 1, false));
+            days.insert(draw(7, d("2026-11-06") + TimeDelta::hours(i), 1, 1, false));
         }
-        assert!(days.len() > 5, "quests change from day to day");
+        assert!(days.len() > 5, "quests change from hour to hour");
     }
 
     #[test]
@@ -141,7 +151,7 @@ mod tests {
             let q = draw(uid, d("2026-11-06"), 1, 1, false);
             assert!(!q.contains(&"cash_wheel") && !q.contains(&"number_match"));
         }
-        assert!((0..200).any(|uid| draw(uid, d("2026-11-06"), 1, 5, false).contains(&"cash_wheel")));
+        assert!((0..200).any(|uid| draw(uid, d("2026-11-06"), 1, 6, false).contains(&"cash_wheel")));
     }
 
     #[test]
@@ -168,27 +178,29 @@ mod tests {
     #[test]
     fn later_rounds_ask_a_little_more() {
         let goals = |key| (1..=ROUNDS).map(|r| quest(key).unwrap().goal_in(r)).collect::<Vec<_>>();
-        assert_eq!(goals("scratch_5"), [5, 8, 10, 13]);
-        assert_eq!(goals("coins_300"), [300, 450, 600, 750]);
-        assert_eq!(goals("pocket"), [1, 2, 2, 3]);
+        assert_eq!(goals("scratch_5"), [5, 8, 10]);
+        assert_eq!(goals("coins_300"), [300, 450, 600]);
+        assert_eq!(goals("pocket"), [1, 2, 2]);
         let scratch = quest("scratch_5").unwrap();
         assert_eq!(scratch.reward_in(1), Prize::Coins { amount: 100 });
-        assert_eq!(scratch.reward_in(4), Prize::Coins { amount: 250 });
+        assert_eq!(scratch.reward_in(3), Prize::Coins { amount: 200 });
         assert_eq!(quest("win_3").unwrap().reward_in(3), Prize::Ticket { series: Series::LuckyThree });
+        assert_eq!(bonus(1), Prize::Ticket { series: Series::LuckyThree });
+        assert_eq!(bonus(ROUNDS), Prize::Ticket { series: Series::TicketChain }, "the hour's last round");
     }
 
     #[test]
-    fn later_rounds_are_new_draws_without_the_envelope() {
-        let day = d("2026-11-06");
-        assert!((0..300).any(|uid| draw(uid, day, 1, 1, false).contains(&"envelope")));
+    fn rounds_and_hours_are_new_draws() {
+        let hour = d("2026-11-06");
+        assert!((0..50).any(|uid| draw(uid, hour, 1, 1, false) != draw(uid, hour, 2, 1, false)));
         for uid in 0..300 {
-            for round in 2..=ROUNDS {
-                let q = draw(uid, day, round, 1, false);
-                assert_eq!(q.len(), PER_DAY);
-                assert!(!q.contains(&"envelope"));
+            for round in 1..=ROUNDS {
+                assert_eq!(draw(uid, hour, round, 1, false).len(), PER_DAY);
             }
         }
-        assert!((0..50).any(|uid| draw(uid, day, 1, 1, false) != draw(uid, day, 2, 1, false)));
+        assert!(quest("envelope").is_none(), "the envelope opens once a day: no hourly quest");
+        let t: DateTime<Utc> = "2026-11-06T10:59:59Z".parse().unwrap();
+        assert_eq!(slot_of(t), "2026-11-06T10:00:00Z".parse::<DateTime<Utc>>().unwrap());
     }
 
     #[test]

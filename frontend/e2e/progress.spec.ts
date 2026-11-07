@@ -15,7 +15,7 @@ test('a first win earns achievements and a level, announced', async ({ page }) =
 	const toast = page.locator('.news .toast');
 	await expect(toast).toHaveAttribute('data-kind', 'level');
 	await expect(toast).toContainText('Level 2!');
-	await expect(toast).toContainText('Number Match');
+	await expect(toast).toContainText('Ticket Chain');
 	await toast.click();
 	await expect(toast).toContainText('First scratch');
 	await toast.click();
@@ -27,7 +27,7 @@ test('a first win earns achievements and a level, announced', async ({ page }) =
 	// The level's ticket waits in the stack (opening it would scratch it)
 	await page.getByRole('dialog').getByRole('button', { name: 'Back to the lobby' }).click();
 	await expect(page.getByText('1 ticket to scratch')).toBeVisible();
-	await expect(page.locator('.stub')).toContainText('Number Match');
+	await expect(page.locator('.stub')).toContainText('Ticket Chain');
 	await expect(page.locator('.stub')).toContainText('Reward');
 
 	await visit(page, '/trophies');
@@ -44,7 +44,7 @@ test('quests move as you play, pay once, and one can be swapped', async ({ page 
 		['win_3', 0]
 	]);
 	await visit(page, '/');
-	const quests = page.getByRole('region', { name: 'Daily quests' });
+	const quests = page.getByRole('region', { name: 'Quests of the hour' });
 	await expect(quests.locator('li')).toHaveCount(3);
 	await expect(quests).toContainText('0/3');
 
@@ -57,7 +57,7 @@ test('quests move as you play, pay once, and one can be swapped', async ({ page 
 	await quests.getByRole('button', { name: 'Swap: Win 3 times' }).click();
 	await expect(quests.locator('li[data-quest="win_3"]')).toHaveCount(0);
 	await expect(quests.locator('li')).toHaveCount(3);
-	// One swap a day
+	// One swap an hour
 	await expect(quests.getByRole('button', { name: /Swap/ })).toHaveCount(0);
 });
 
@@ -74,8 +74,8 @@ test('finishing the three opens three harder ones, round by round', async ({ pag
 		[name]
 	);
 	await visit(page, '/');
-	const quests = page.getByRole('region', { name: 'Daily quests' });
-	await expect(quests).toContainText('Round 1 of 4');
+	const quests = page.getByRole('region', { name: 'Quests of the hour' });
+	await expect(quests).toContainText('Round 1 of 3');
 	await expect(quests).toContainText('Then three harder quests');
 
 	await page.getByRole('button', { name: 'Take', exact: true }).click();
@@ -83,10 +83,10 @@ test('finishing the three opens three harder ones, round by round', async ({ pag
 	await expect(toast).toContainText('Take your pocket');
 	await toast.click();
 	await expect(toast).toContainText('Three harder quests are up');
-	await expect(quests).toContainText('Round 2 of 4');
+	await expect(quests).toContainText('Round 2 of 3');
 	await expect(quests).toContainText('0/3');
-	// Half as much again: the envelope does not come back
-	await expect(quests.locator('li[data-quest="envelope"]')).toHaveCount(0);
+	// Half as much again, and new quests on the hour
+	await expect(quests.getByTestId('quests-reset')).toHaveText(/New quests in \d+:\d\d/);
 	const goals: number[] = (await (await page.request.get('/api/quests')).json()).items.map(
 		(q: { goal: number }) => q.goal
 	);

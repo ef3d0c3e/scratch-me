@@ -62,8 +62,8 @@ async fn body(res: ServiceResponse) -> Value {
 /// tests that count coins.
 async fn quiet(name: &str) {
     diesel::sql_query(
-        "INSERT INTO quests (user_id, day, key)
-         SELECT id, (now() AT TIME ZONE tz)::date, 'none' FROM users WHERE username = $1",
+        "INSERT INTO quests (user_id, slot, key)
+         SELECT id, date_trunc('hour', now()), 'none' FROM users WHERE username = $1",
     )
     .bind::<diesel::sql_types::Text, _>(name)
     .execute(&mut conn().await)
@@ -450,8 +450,8 @@ async fn set_quests(name: &str, quests: &[(&str, i32)]) {
         .unwrap();
     for (key, progress) in quests {
         diesel::sql_query(
-            "INSERT INTO quests (user_id, day, key, progress)
-             SELECT id, (now() AT TIME ZONE tz)::date, $2, $3 FROM users WHERE username = $1",
+            "INSERT INTO quests (user_id, slot, key, progress)
+             SELECT id, date_trunc('hour', now()), $2, $3 FROM users WHERE username = $1",
         )
         .bind::<diesel::sql_types::Text, _>(name)
         .bind::<diesel::sql_types::Text, _>(*key)
@@ -477,17 +477,17 @@ async fn scratching_gives_xp_achievements_and_levels() {
     let p = &body["progress"];
     // 10 for scratching, 5 for winning, 50/20 = 2 for the coins
     assert_eq!(p["xp_gained"], 17);
-    assert_eq!(p["level"]["level"], 2, "95 + 17 passes 100");
-    assert_eq!(p["level_ups"], json!([{ "what": "2", "reward": { "kind": "ticket", "series": "number_match" } }]));
+    assert_eq!(p["level"]["level"], 2, "295 + 17 passes 300");
+    assert_eq!(p["level_ups"], json!([{ "what": "2", "reward": { "kind": "ticket", "series": "ticket_chain" } }]));
     let got: Vec<&str> = p["achievements"].as_array().unwrap().iter().map(|a| a["what"].as_str().unwrap()).collect();
     assert_eq!(got, ["first_scratch", "first_win"]);
     // 50 won, 50 + 50 for the two achievements
     assert_eq!(body["coins"], STARTING_COINS + 150);
-    assert_eq!(p["tickets"][0]["series"], "number_match");
+    assert_eq!(p["tickets"][0]["series"], "ticket_chain");
     assert_eq!(p["tickets"][0]["source"], "reward");
 
     let (_, me_body) = get(&app, "/api/me", &me).await;
-    assert_eq!(me_body["level"], json!({ "level": 2, "xp": 112, "from": 100, "to": 300 }));
+    assert_eq!(me_body["level"], json!({ "level": 2, "xp": 312, "from": 300, "to": 900 }));
     let (_, list) = get(&app, "/api/achievements", &me).await;
     let first = list.as_array().unwrap().iter().find(|a| a["id"] == "scratch_100").unwrap();
     assert_eq!(first["progress"], json!([1, 100]));
@@ -518,13 +518,12 @@ async fn quests_pay_once_and_the_bonus_once() {
     let p = &body["progress"];
     let done: Vec<&str> = p["quests"].as_array().unwrap().iter().map(|q| q["what"].as_str().unwrap()).collect();
     assert_eq!(done, ["scratch_5", "win_3"]);
-    assert_eq!(p["bonus"], json!({ "kind": "ticket", "series": "ticket_chain" }));
+    assert_eq!(p["bonus"], json!({ "kind": "ticket", "series": "lucky_three" }), "a first round's bonus");
     assert_eq!(p["next_round"], 2, "three harder quests open");
-    // 50 won, 100 for scratch_5; win_3 gives a Lucky Three, the bonus a chain
+    // 50 won, 100 for scratch_5; win_3 gives a Lucky Three, and so does the bonus
     assert_eq!(body["coins"], STARTING_COINS + 150);
     let series: Vec<&str> = p["tickets"].as_array().unwrap().iter().map(|t| t["series"].as_str().unwrap()).collect();
-    // The quests' and bonus' xp (25 + 25 + 50) and the scratch's reach level 2: a Number Match
-    assert_eq!(series, ["lucky_three", "ticket_chain", "number_match"]);
+    assert_eq!(series, ["lucky_three", "lucky_three"]);
 
     // Done is done: another scratch pays neither again
     let id = known_ticket(&name, "lucky_three", json!({ "cells": vec!["clover"; 9], "win": "clover" }), prize).await;
@@ -536,7 +535,7 @@ async fn quests_pay_once_and_the_bonus_once() {
 }
 
 #[actix_web::test]
-async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
+async fn quest_rounds_ask_more_and_stop_after_the_third() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("rounds");
@@ -558,11 +557,11 @@ async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
     let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
     assert_eq!(body["progress"]["next_round"], 2);
     let (_, q) = get(&app, "/api/quests", &me).await;
-    assert_eq!((q["round"].as_i64(), q["rounds"].as_i64()), (Some(2), Some(4)));
+    assert_eq!((q["round"].as_i64(), q["rounds"].as_i64()), (Some(2), Some(3)));
+    assert!(q["resets_at"].as_str().unwrap().ends_with(":00:00Z"), "on the hour");
     let items = q["items"].as_array().unwrap();
     assert_eq!(items.len(), 3);
     for item in items {
-        assert_ne!(item["key"], "envelope", "opens once a day");
         assert_eq!((item["progress"].as_i64(), item["done"].as_bool()), (Some(0), Some(false)));
         let base = match item["key"].as_str().unwrap() {
             "scratch_5" => 5,
@@ -573,7 +572,7 @@ async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
         assert_eq!(item["goal"].as_i64().unwrap(), (base * 3 + 1) / 2, "{item}");
     }
 
-    // The fourth round: its bonus is the day's last, and no fifth opens
+    // The third round: its bonus is the hour's last (a chain), and no fourth opens
     let c = &mut conn().await;
     let uid = user_id(&name).await;
     diesel::sql_query("DELETE FROM quests WHERE user_id = $1")
@@ -582,16 +581,16 @@ async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
         .await
         .unwrap();
     diesel::sql_query(
-        "INSERT INTO quests (user_id, day, round, key, progress, done_at)
-         SELECT id, (now() AT TIME ZONE tz)::date, 4, k, p, d FROM users,
-           (VALUES ('scratch_5', 12, NULL::timestamptz), ('pocket', 3, now()), ('buy', 3, now())) v(k, p, d)
+        "INSERT INTO quests (user_id, slot, round, key, progress, done_at)
+         SELECT id, date_trunc('hour', now()), 3, k, p, d FROM users,
+           (VALUES ('scratch_5', 9, NULL::timestamptz), ('pocket', 2, now()), ('buy', 2, now())) v(k, p, d)
          WHERE id = $1",
     )
     .bind::<diesel::sql_types::BigInt, _>(uid)
     .execute(c)
     .await
     .unwrap();
-    diesel::sql_query("UPDATE quest_days SET bonuses = 3 WHERE user_id = $1")
+    diesel::sql_query("UPDATE quest_slots SET bonuses = 2 WHERE user_id = $1")
         .bind::<diesel::sql_types::BigInt, _>(uid)
         .execute(c)
         .await
@@ -599,18 +598,18 @@ async fn quest_rounds_ask_more_and_stop_after_the_fourth() {
     let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
     let p = &body["progress"];
     assert_eq!(p["quests"][0]["what"], "scratch_5");
-    assert_eq!(p["quests"][0]["goal"], 13);
-    assert_eq!(p["quests"][0]["reward"], json!({ "kind": "coins", "amount": 250 }));
-    assert_eq!(p["bonus"]["kind"], "ticket");
+    assert_eq!(p["quests"][0]["goal"], 10);
+    assert_eq!(p["quests"][0]["reward"], json!({ "kind": "coins", "amount": 200 }));
+    assert_eq!(p["bonus"], json!({ "kind": "ticket", "series": "ticket_chain" }));
     assert_eq!(p["next_round"], Value::Null);
     let (_, q) = get(&app, "/api/quests", &me).await;
-    assert_eq!((q["round"].as_i64(), q["bonus_done"].as_bool()), (Some(4), Some(true)));
+    assert_eq!((q["round"].as_i64(), q["bonus_done"].as_bool()), (Some(3), Some(true)));
     let (_, body) = post(&app, &format!("/api/tickets/{}/scratch", win().await), &me).await;
-    assert_eq!(body["progress"]["bonus"], Value::Null, "four rounds a day");
+    assert_eq!(body["progress"]["bonus"], Value::Null, "three rounds an hour");
 }
 
 #[actix_web::test]
-async fn one_reroll_a_day() {
+async fn one_swap_an_hour() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("reroll");
@@ -1073,6 +1072,19 @@ async fn fish_go_into_the_aquarium() {
     let mut caught: Vec<&str> = aq["caught"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
     caught.sort();
     assert_eq!(caught, ["golden_koi", "tuna"]);
+    // The ticket says what was new, as it was decided
+    let mut new: Vec<&str> =
+        body["layout"]["aquarium"]["new"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    new.sort();
+    assert_eq!(new, ["golden_koi", "tuna"]);
+    assert_eq!(
+        (body["layout"]["aquarium"]["caught"].as_i64(), body["layout"]["aquarium"]["of"].as_i64()),
+        (Some(2), Some(12))
+    );
+    let again = json!({ "casts": [{ "fish": "tuna", "coins": 20 }] });
+    let id = known_ticket(&name, "fishing", again, json!({ "kind": "coins", "amount": 20 })).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(body["layout"]["aquarium"]["new"], json!([]), "a tuna again is not new");
 }
 
 #[actix_web::test]
@@ -1443,7 +1455,7 @@ async fn leaderboard_ranks_members_by_coins_and_level() {
     set_xp(&b, 10_000_000 + chrono::Utc::now().timestamp_millis() % 1_000_000).await;
     let (_, board) = get(&app, "/api/leaderboard?by=level", &ca).await;
     let row = board["rows"].as_array().unwrap().iter().find(|r| r["username"] == b.as_str()).expect("ranked");
-    assert!(row["level"].as_i64().unwrap() > 400);
+    assert!(row["level"].as_i64().unwrap() > 200);
     assert!(board["me"]["rank"].as_i64().unwrap() > row["rank"].as_i64().unwrap());
 
     // A guest looks, unranked

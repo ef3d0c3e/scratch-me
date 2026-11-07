@@ -5,8 +5,9 @@
 	import { getSession } from '#lib/session.svelte.ts';
 	import { prizeText, questName } from '#lib/prize.ts';
 	import type { QuestsDto } from '#lib/types.ts';
+	import { countdown, due } from '#lib/time.ts';
 
-	/** The round's three quests, the bonus for all three, and the day's one reroll */
+	/** The round's three quests, the bonus for all three, and the hour's one swap */
 	const i18n = getI18n();
 	const session = getSession();
 	let quests = $state<QuestsDto | null>(null);
@@ -21,6 +22,18 @@
 		}
 	}
 	onMount(load);
+	/** The hour turns: new quests */
+	let now = $state(Date.now());
+	onMount(() => {
+		const id = setInterval(() => {
+			now = Date.now();
+			if (quests && due(quests.resets_at, now)) {
+				quests = { ...quests, resets_at: new Date(now + 60_000).toISOString() };
+				load();
+			}
+		}, 1000);
+		return () => clearInterval(id);
+	});
 	// Progress landed somewhere: the bars move
 	$effect(() => {
 		if (session.progressed > 0) load();
@@ -51,6 +64,9 @@
 	{#if quests}
 		<p class="round" data-round={quests.round}>
 			{i18n.t('quests.round', { n: quests.round, of: quests.rounds })}
+			<span class="resets num" data-testid="quests-reset"
+				>{i18n.t('quests.resets', { time: countdown(quests.resets_at, now) })}</span
+			>
 			<span class="pips" aria-hidden="true">
 				{#each { length: quests.rounds }, i (i)}
 					<span
@@ -197,6 +213,10 @@
 		font-size: 12px;
 		color: var(--muted);
 		margin: -4px 0 10px;
+	}
+	.resets {
+		margin-left: auto;
+		margin-right: 8px;
 	}
 	.pips {
 		display: flex;

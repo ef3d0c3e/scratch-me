@@ -334,7 +334,8 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                         issued.extend(issue_with(conn, user.id, *series, Source::Bundle, 1, Some(b.seal)).await?);
                     }
                     // Counts as one purchase for the quests
-                    let progress = progress::apply(conn, user.id, &[Event::Bought(b.tickets[0])]).await?;
+                    let events = [Event::Bought(b.tickets[0]), Event::BundleBought];
+                    let progress = progress::apply(conn, user.id, &events).await?;
                     let charms = worn::worn(conn, user.id).await?;
                     Ok((
                         Bought {

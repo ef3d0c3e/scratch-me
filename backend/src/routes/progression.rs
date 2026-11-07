@@ -7,11 +7,10 @@ use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::auth::{CurrentUser, parse_tz};
-use crate::envelope;
+use crate::auth::CurrentUser;
 use crate::error::{ApiError, ApiResult};
 use crate::progress::{self, achievements, levels, quests};
-use crate::schema::{achievements as earned, quest_days, quests as rows, users};
+use crate::schema::{achievements as earned, quest_slots, quests as rows, users};
 use crate::tickets::Prize;
 
 #[derive(Debug, Serialize)]
@@ -31,19 +30,19 @@ pub struct QuestsDto {
     pub round: i32,
     pub rounds: i32,
     pub bonus: Prize,
-    /// This round's three done and its bonus paid (the last round: the day is done)
+    /// This round's three done and its bonus paid (the last round: the hour is done)
     pub bonus_done: bool,
-    /// The day's one reroll is spent
+    /// The hour's one swap is spent
     pub rerolled: bool,
     pub resets_at: DateTime<Utc>,
 }
 
 async fn quests_dto(conn: &mut diesel_async::AsyncPgConnection, uid: i64) -> ApiResult<QuestsDto> {
-    let day = progress::quest_day(conn, uid).await?;
-    let round = progress::ensure_quests(conn, uid, day).await?;
+    let slot = progress::quest_slot(Utc::now());
+    let round = progress::ensure_quests(conn, uid, slot).await?;
     let found: Vec<(String, i32, Option<DateTime<Utc>>)> = rows::table
         .filter(rows::user_id.eq(uid))
-        .filter(rows::day.eq(day))
+        .filter(rows::slot.eq(slot))
         .filter(rows::round.eq(round))
         .order(rows::key)
         .select((rows::key, rows::progress, rows::done_at))
@@ -56,22 +55,21 @@ async fn quests_dto(conn: &mut diesel_async::AsyncPgConnection, uid: i64) -> Api
             Some(QuestDto { key, goal: q.goal_in(round), progress, done: done.is_some(), reward: q.reward_in(round) })
         })
         .collect();
-    let flags: Option<(bool, i32)> = quest_days::table
-        .find((uid, day))
-        .select((quest_days::rerolled, quest_days::bonuses))
+    let flags: Option<(bool, i32)> = quest_slots::table
+        .find((uid, slot))
+        .select((quest_slots::rerolled, quest_slots::bonuses))
         .first(conn)
         .await
         .optional()?;
     let (rerolled, bonuses) = flags.unwrap_or((false, 0));
-    let tz: String = users::table.find(uid).select(users::tz).first(conn).await?;
     Ok(QuestsDto {
         items,
         round,
         rounds: quests::ROUNDS,
-        bonus: quests::BONUS,
+        bonus: quests::bonus(round),
         bonus_done: bonuses >= round,
         rerolled,
-        resets_at: envelope::next_day_at(parse_tz(Some(&tz)), Utc::now()),
+        resets_at: slot + chrono::Duration::hours(1),
     })
 }
 
@@ -86,7 +84,7 @@ pub struct Reroll {
     key: String,
 }
 
-/// Swaps one unfinished quest for another, once a day
+/// Swaps one unfinished quest for another, once an hour
 #[post("/quests/reroll")]
 pub async fn reroll(
     state: web::Data<AppState>,
@@ -98,11 +96,11 @@ pub async fn reroll(
     let out = conn
         .transaction(async move |conn| {
             let xp: i64 = users::table.find(user.id).select(users::xp).for_update().first(conn).await?;
-            let day = progress::quest_day(conn, user.id).await?;
-            let round = progress::ensure_quests(conn, user.id, day).await?;
-            let rerolled: bool = quest_days::table
-                .find((user.id, day))
-                .select(quest_days::rerolled)
+            let slot = progress::quest_slot(Utc::now());
+            let round = progress::ensure_quests(conn, user.id, slot).await?;
+            let rerolled: bool = quest_slots::table
+                .find((user.id, slot))
+                .select(quest_slots::rerolled)
                 .first(conn)
                 .await
                 .optional()?
@@ -111,7 +109,7 @@ pub async fn reroll(
                 return Err(ApiError::Conflict("already_rerolled"));
             }
             let done: Option<Option<DateTime<Utc>>> =
-                rows::table.find((user.id, day, round, &key)).select(rows::done_at).first(conn).await.optional()?;
+                rows::table.find((user.id, slot, round, &key)).select(rows::done_at).first(conn).await.optional()?;
             match done {
                 None => return Err(ApiError::NotFound("quest")),
                 Some(Some(_)) => return Err(ApiError::Conflict("quest_done")),
@@ -119,23 +117,23 @@ pub async fn reroll(
             }
             let have: Vec<String> = rows::table
                 .filter(rows::user_id.eq(user.id))
-                .filter(rows::day.eq(day))
+                .filter(rows::slot.eq(slot))
                 .filter(rows::round.eq(round))
                 .select(rows::key)
                 .load(conn)
                 .await?;
-            let new = quests::reroll(user.id, day, round, levels::level_for(xp), user.is_guest, &have)
+            let new = quests::reroll(user.id, slot, round, levels::level_for(xp), user.is_guest, &have)
                 .ok_or(ApiError::Conflict("no_other_quest"))?;
-            diesel::delete(rows::table.find((user.id, day, round, &key))).execute(conn).await?;
+            diesel::delete(rows::table.find((user.id, slot, round, &key))).execute(conn).await?;
             diesel::insert_into(rows::table)
-                .values((rows::user_id.eq(user.id), rows::day.eq(day), rows::round.eq(round), rows::key.eq(new)))
+                .values((rows::user_id.eq(user.id), rows::slot.eq(slot), rows::round.eq(round), rows::key.eq(new)))
                 .execute(conn)
                 .await?;
-            diesel::insert_into(quest_days::table)
-                .values((quest_days::user_id.eq(user.id), quest_days::day.eq(day), quest_days::rerolled.eq(true)))
-                .on_conflict((quest_days::user_id, quest_days::day))
+            diesel::insert_into(quest_slots::table)
+                .values((quest_slots::user_id.eq(user.id), quest_slots::slot.eq(slot), quest_slots::rerolled.eq(true)))
+                .on_conflict((quest_slots::user_id, quest_slots::slot))
                 .do_update()
-                .set(quest_days::rerolled.eq(true))
+                .set(quest_slots::rerolled.eq(true))
                 .execute(conn)
                 .await?;
             quests_dto(conn, user.id).await
