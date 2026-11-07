@@ -170,6 +170,8 @@ async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]
         .select((quest_rows::key, quest_rows::progress, quest_rows::done_at))
         .load(conn)
         .await?;
+    // A quest charm worn: progress counts double
+    let double = crate::routes::charms::wearing(conn, uid, crate::charms::Kind::Quest).await?.is_some();
     let mut done = 0;
     let mut real = 0;
     for (key, progress, done_at) in rows {
@@ -179,7 +181,7 @@ async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]
             done += 1;
             continue;
         }
-        let gained: i32 = events.iter().map(|e| quests::counts(&key, e)).sum();
+        let gained: i32 = events.iter().map(|e| quests::counts(&key, e)).sum::<i32>() * if double { 2 } else { 1 };
         if gained == 0 {
             continue;
         }

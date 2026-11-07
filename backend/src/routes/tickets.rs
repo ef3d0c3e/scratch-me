@@ -320,7 +320,8 @@ pub async fn scratch(
             }
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
             let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra + boost.bonus + boost.seal));
-            let progress = progress::apply(conn, uid, &[event]).await?;
+            boost.xp = charms::scholar(conn, uid, kind, progress::events::xp(&event)).await?;
+            let progress = progress::apply(conn, uid, &[event, Event::ExtraXp(boost.xp)]).await?;
             Ok::<_, ApiError>(Scratched {
                 id,
                 series,
@@ -480,7 +481,8 @@ async fn finish(
     }
     let echoed = seal_bonus(conn, uid, seal, series, &prize, &mut boost).await?;
     let event = Event::Scratched(Scratch::of(series, &layout, &prize, boost.bonus + boost.seal));
-    let progress = progress::apply(conn, uid, &[event]).await?;
+    boost.xp = charms::scholar(conn, uid, series, progress::events::xp(&event)).await?;
+    let progress = progress::apply(conn, uid, &[event, Event::ExtraXp(boost.xp)]).await?;
     Ok(Scratched {
         id,
         series: series.key().to_owned(),

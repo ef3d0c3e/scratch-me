@@ -18,6 +18,8 @@ pub enum Event {
     Gifted,
     /// A bundle bought
     BundleBought,
+    /// Experience on top, from a Scholar charm
+    ExtraXp(i64),
 }
 
 /// A ticket scratched, with what the achievements look at
@@ -64,6 +66,7 @@ pub fn xp(event: &Event) -> i64 {
         Event::Scratched(s) => 10 + if s.win { 5 } else { 0 } + (s.coins / 20).min(50),
         Event::EnvelopeOpened { .. } => 20,
         Event::PocketTaken(_) | Event::Bought(_) | Event::Shouted | Event::Gifted | Event::BundleBought => 0,
+        Event::ExtraXp(n) => *n,
     }
 }
 

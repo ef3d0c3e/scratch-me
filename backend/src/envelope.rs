@@ -57,6 +57,17 @@ pub fn current(day: i32, last: Option<NaiveDate>, today: NaiveDate) -> i32 {
     }
 }
 
+/// Days missed since the last claim (0 when it was today or yesterday)
+pub fn missed(last: Option<NaiveDate>, today: NaiveDate) -> i32 {
+    last.map_or(0, |l| ((today - l).num_days() - 1).max(0) as i32)
+}
+
+/// The last claim as a streak shield sees it: the missed days covered, as if
+/// claimed yesterday
+pub fn shielded(today: NaiveDate) -> Option<NaiveDate> {
+    today.pred_opt()
+}
+
 /// Claiming today: the new streak day, None when today is already claimed
 pub fn claim(day: i32, last: Option<NaiveDate>, today: NaiveDate) -> Option<i32> {
     if last == Some(today) {
@@ -81,6 +92,11 @@ mod tests {
         assert_eq!(claim(3, Some(d("2026-11-06")), d("2026-11-06")), None);
         assert_eq!(current(4, Some(d("2026-11-05")), d("2026-11-06")), 4);
         assert_eq!(current(4, Some(d("2026-11-01")), d("2026-11-06")), 0);
+        assert_eq!(missed(Some(d("2026-11-04")), d("2026-11-06")), 1);
+        assert_eq!(missed(Some(d("2026-11-05")), d("2026-11-06")), 0);
+        assert_eq!(missed(None, d("2026-11-06")), 0);
+        // A shield makes it as if claimed yesterday: the streak goes on
+        assert_eq!(claim(5, shielded(d("2026-11-06")), d("2026-11-06")), Some(6));
     }
 
     #[test]

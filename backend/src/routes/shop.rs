@@ -81,7 +81,11 @@ pub struct ShopDto {
 }
 
 #[get("/shop")]
-pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
+pub async fn list(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<web::Json<ShopDto>> {
+    // Some charms cost by the player's level
+    let mut conn = state.pool.get().await?;
+    let xp: i64 = users::table.find(user.id).select(users::xp).first(&mut conn).await?;
+    let level = levels::level_for(xp);
     let today = Utc::now().date_naive();
     let bundles_today = |b: &bundles::Bundle| b.in_season(today);
     let mut tickets: Vec<TicketOffer> = Series::ALL
@@ -102,11 +106,11 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
     let cosmetics = Cosmetic::all().into_iter().map(|item| CosmeticOffer { item, origin: item.origin() });
     let charms = Charm::all().into_iter().map(|charm| CharmOffer {
         charm,
-        price: charm.price(),
+        price: charm.price(level),
         level: charm.tier.level(),
         strength: charm.strength(),
-        charges: charm.tier.charges(),
-        minutes: charm.tier.lasts().num_minutes(),
+        charges: charm.charges(),
+        minutes: charm.lasts().num_minutes(),
         reach: charm.tier.reach(),
     });
     let bundles = bundles::all()
@@ -121,7 +125,7 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
             separately: b.separately(),
         })
         .collect();
-    web::Json(ShopDto { bundles, tickets, cosmetics: cosmetics.collect(), charms: charms.collect() })
+    Ok(web::Json(ShopDto { bundles, tickets, cosmetics: cosmetics.collect(), charms: charms.collect() }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -165,16 +169,18 @@ pub struct Bought {
 #[post("/shop/buy")]
 pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<Buy>) -> ApiResult<web::Json<Bought>> {
     let buy = body.into_inner();
+    let mut conn = state.pool.get().await?;
+    let xp: i64 = users::table.find(user.id).select(users::xp).first(&mut conn).await?;
+    let level = levels::level_for(xp);
     let list_price = match &buy {
         Buy::Ticket { series, .. } => series.price(),
         Buy::Cosmetic { item } => item.price(),
-        Buy::Charm { charm } => Some(charm.price()),
+        Buy::Charm { charm } => Some(charm.price(level)),
         Buy::Bundle { bundle } => bundles::bundle(bundle).map(|b| b.price),
     }
     .ok_or(ApiError::Invalid("not_for_sale"))?;
     let bought = if let Buy::Charm { charm } = &buy { Some(*charm) } else { None };
     let bundle = if let Buy::Bundle { bundle } = &buy { Some(bundle.clone()) } else { None };
-    let mut conn = state.pool.get().await?;
     let name = user.username.clone();
     let out = conn
         .transaction(async move |conn| {

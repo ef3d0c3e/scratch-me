@@ -100,11 +100,22 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         .load(&mut conn)
         .await?;
     let charms = super::charms::worn(&mut conn, user.id).await?;
+    let fast = super::charms::fast_pocket(&mut conn, user.id).await?;
 
     let now = Utc::now();
     let tz = parse_tz(Some(&tz));
     let today = envelope::today(tz, now);
-    let (day, best, last) = streak.unwrap_or((0, 0, None));
+    let (day, best, mut last) = streak.unwrap_or((0, 0, None));
+    // A shield worn with enough charges keeps the streak: shown as kept
+    let missed = envelope::missed(last, today);
+    let covered = missed > 0
+        && super::charms::worn(&mut conn, user.id)
+            .await?
+            .iter()
+            .any(|c| c.kind == crate::charms::Kind::Shield && c.charges >= missed);
+    if covered {
+        last = envelope::shielded(today);
+    }
     let next = envelope::claim(day, last, today);
     let envelope = EnvelopeDto {
         available: next.is_some(),
@@ -117,7 +128,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
     Ok(web::Json(MeDto {
         username: user.username,
         coins,
-        pocket: pocket::level(stored, at, now),
+        pocket: pocket::level(stored, at, now, fast),
         pocket_worth: pocket::worth(levels::level_for(xp)),
         envelope,
         theme,
@@ -155,7 +166,8 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
                 .first(conn)
                 .await?;
             let now = Utc::now();
-            let (n, new_at) = pocket::take(stored, at, now);
+            let fast = super::charms::fast_pocket(conn, user.id).await?;
+            let (n, new_at) = pocket::take(stored, at, now, fast);
             if n == 0 {
                 return Err(ApiError::Conflict("pocket_empty"));
             }
@@ -168,7 +180,7 @@ pub async fn claim_pocket(state: web::Data<AppState>, user: CurrentUser) -> ApiR
             let series: Vec<Series> = (0..n).map(|_| pocket::pick(level, now.date_naive(), &mut rand::rng())).collect();
             let tickets = issue_each(conn, user.id, &series, Source::Pocket).await?;
             let progress = progress::apply(conn, user.id, &[Event::PocketTaken(n)]).await?;
-            Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now), progress })
+            Ok::<_, ApiError>(PocketClaim { tickets, pocket: pocket::level(0, new_at, now, fast), progress })
         })
         .await?;
     state.metrics.pocket_claim();
@@ -184,6 +196,10 @@ pub struct EnvelopeClaim {
     pub contents: Contents,
     pub coins: i64,
     pub tickets: Vec<TicketDto>,
+    /// A streak shield covered missed days
+    pub shielded: bool,
+    /// Charms worn after this claim (a shield may have spent charges)
+    pub charms: Vec<super::charms::WornCharm>,
     pub progress: Progress,
 }
 
@@ -196,13 +212,18 @@ pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> Ap
         .transaction(async move |conn| {
             let tz: String = users::table.find(user.id).select(users::tz).for_update().first(conn).await?;
             let today = envelope::today(parse_tz(Some(&tz)), Utc::now());
-            let (day, best, last): (i32, i32, Option<NaiveDate>) = streaks::table
+            let (day, best, mut last): (i32, i32, Option<NaiveDate>) = streaks::table
                 .find(user.id)
                 .select((streaks::day, streaks::best, streaks::last_claim))
                 .first(conn)
                 .await
                 .optional()?
                 .unwrap_or((0, 0, None));
+            // Missed days: a streak shield worn covers them, a charge each
+            let shielded = super::charms::shield(conn, user.id, envelope::missed(last, today)).await?;
+            if shielded {
+                last = envelope::shielded(today);
+            }
             let day = envelope::claim(day, last, today).ok_or(ApiError::Conflict("already_claimed"))?;
             let best = best.max(day);
             diesel::insert_into(streaks::table)
@@ -224,7 +245,16 @@ pub async fn claim_envelope(state: web::Data<AppState>, user: CurrentUser) -> Ap
                 .await?;
             let tickets = issue_each(conn, user.id, &contents.tickets, Source::Envelope).await?;
             let progress = progress::apply(conn, user.id, &[Event::EnvelopeOpened { streak: day }]).await?;
-            Ok::<_, ApiError>(EnvelopeClaim { day, contents, coins: progress.coins, tickets, progress })
+            let charms = super::charms::worn(conn, user.id).await?;
+            Ok::<_, ApiError>(EnvelopeClaim {
+                day,
+                contents,
+                coins: progress.coins,
+                tickets,
+                shielded,
+                charms,
+                progress,
+            })
         })
         .await?;
     state.metrics.envelope_open(out.contents.coins);

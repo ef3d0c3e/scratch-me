@@ -42,7 +42,7 @@ pub(crate) async fn worn(conn: &mut AsyncPgConnection, uid: i64) -> ApiResult<Ve
                 kind: c.kind,
                 tier: c.tier,
                 strength: c.strength(),
-                reach: c.tier.reach(),
+                reach: c.reach(),
                 charges,
                 expires_at,
             })
@@ -69,9 +69,9 @@ pub(crate) async fn wear(conn: &mut AsyncPgConnection, uid: i64, charm: Charm) -
             charms::user_id.eq(uid),
             charms::kind.eq(charm.kind.key()),
             charms::tier.eq(charm.tier.key()),
-            charms::charges.eq(charm.tier.charges()),
+            charms::charges.eq(charm.charges()),
             charms::bought_at.eq(now),
-            charms::expires_at.eq(now + charm.tier.lasts()),
+            charms::expires_at.eq(now + charm.lasts()),
         ))
         .on_conflict_do_nothing()
         .execute(conn)
@@ -106,6 +106,58 @@ async fn take(conn: &mut AsyncPgConnection, uid: i64, kind: Kind, series: Series
     Ok(tier.and_then(|t| Charm::parse(kind.key(), &t)))
 }
 
+/// The charm of `kind` worn now, if any, without spending it: those that
+/// only last a time (hourglass, quest)
+pub(crate) async fn wearing(conn: &mut AsyncPgConnection, uid: i64, kind: Kind) -> ApiResult<Option<Charm>> {
+    let tier: Option<String> = charms::table
+        .filter(charms::user_id.eq(uid))
+        .filter(charms::kind.eq(kind.key()))
+        .filter(charms::charges.gt(0))
+        .filter(charms::expires_at.gt(Utc::now()))
+        .select(charms::tier)
+        .first(conn)
+        .await
+        .optional()?;
+    Ok(tier.and_then(|t| Charm::parse(kind.key(), &t)))
+}
+
+/// When the pocket refilled (or refills) twice as fast: the last hourglass
+/// worn, gone or not, so a refill earned during it still counts
+pub(crate) async fn fast_pocket(conn: &mut AsyncPgConnection, uid: i64) -> ApiResult<crate::pocket::Fast> {
+    Ok(charms::table
+        .filter(charms::user_id.eq(uid))
+        .filter(charms::kind.eq(Kind::Hourglass.key()))
+        .select((charms::bought_at, charms::expires_at))
+        .first(conn)
+        .await
+        .optional()?)
+}
+
+/// Scholar: spends a charge on a ticket scratched, and answers the extra
+/// experience for the `xp` it gave
+pub(crate) async fn scholar(conn: &mut AsyncPgConnection, uid: i64, series: Series, xp: i64) -> ApiResult<i64> {
+    Ok(take(conn, uid, Kind::Scholar, series).await?.map_or(0, |c| c.more_xp(xp)))
+}
+
+/// A streak shield covering `missed` days: spends that many charges when it
+/// has them, and answers whether it did
+pub(crate) async fn shield(conn: &mut AsyncPgConnection, uid: i64, missed: i32) -> ApiResult<bool> {
+    if missed <= 0 {
+        return Ok(false);
+    }
+    let n = diesel::update(
+        charms::table
+            .filter(charms::user_id.eq(uid))
+            .filter(charms::kind.eq(Kind::Shield.key()))
+            .filter(charms::charges.ge(missed))
+            .filter(charms::expires_at.gt(Utc::now())),
+    )
+    .set(charms::charges.eq(charms::charges - missed))
+    .execute(conn)
+    .await?;
+    Ok(n == 1)
+}
+
 /// The price of a ticket bought now, and the coins a discount charm took off
 pub(crate) async fn discount(
     conn: &mut AsyncPgConnection,
@@ -134,6 +186,8 @@ pub(crate) struct Boost {
     pub seal: i64,
     /// An echo seal gave one more ticket
     pub echo: bool,
+    /// Experience a Scholar charm added (a charge spent)
+    pub xp: i64,
 }
 
 /// A losing ticket being scratched: a luck charm may draw it again. The new
@@ -195,6 +249,9 @@ impl Boost {
         }
         if self.seal > 0 {
             m.earned("seal", self.seal);
+        }
+        if self.xp > 0 {
+            m.charm_used(Kind::Scholar, 0);
         }
     }
 }

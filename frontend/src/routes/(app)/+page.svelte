@@ -104,6 +104,8 @@
 			const parts = [];
 			if (r.contents.coins) parts.push(i18n.t('lobby.got_coins', { n: r.contents.coins }));
 			if (r.tickets.length) parts.push(i18n.t('lobby.got_tickets', { n: r.tickets.length }));
+			if (r.shielded) parts.push(i18n.t('lobby.shielded'));
+			session.me.charms = r.charms;
 			flash('envelope', parts);
 			await refresh();
 		} catch (e) {

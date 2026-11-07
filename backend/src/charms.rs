@@ -20,6 +20,14 @@ pub enum Kind {
     Luck,
     /// The coins a ticket pays get a bonus. A charge per ticket finished.
     Payout,
+    /// More experience for each ticket scratched. A charge per ticket.
+    Scholar,
+    /// The pocket refills twice as fast while it lasts (no charges)
+    Hourglass,
+    /// Quest progress counts double while it lasts (no charges)
+    Quest,
+    /// Keeps the envelope streak through missed days: a charge per day
+    Shield,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -37,14 +45,25 @@ pub struct Charm {
 }
 
 impl Kind {
-    pub const ALL: [Kind; 3] = [Kind::Discount, Kind::Luck, Kind::Payout];
+    pub const ALL: [Kind; 7] =
+        [Kind::Discount, Kind::Luck, Kind::Payout, Kind::Scholar, Kind::Hourglass, Kind::Quest, Kind::Shield];
 
     pub fn key(self) -> &'static str {
         match self {
             Kind::Discount => "discount",
             Kind::Luck => "luck",
             Kind::Payout => "payout",
+            Kind::Scholar => "scholar",
+            Kind::Hourglass => "hourglass",
+            Kind::Quest => "quest",
+            Kind::Shield => "shield",
         }
+    }
+
+    /// Acts on the coins of tickets bought or scratched: the payback rule
+    /// below holds them to it
+    pub fn on_coins(self) -> bool {
+        matches!(self, Kind::Discount | Kind::Luck | Kind::Payout)
     }
 
     pub fn parse(key: &str) -> Option<Kind> {
@@ -67,25 +86,12 @@ impl Tier {
         Tier::ALL.into_iter().find(|t| t.key() == key)
     }
 
-    /// Uses before it is spent
-    pub fn charges(self) -> i32 {
-        match self {
-            Tier::Bronze => 5,
-            Tier::Silver => 8,
-            Tier::Gold => 12,
-        }
+    /// 0, 1, 2: for tables by tier
+    fn at(self) -> usize {
+        self as usize
     }
 
-    /// How long it lasts once bought
-    pub fn lasts(self) -> Duration {
-        match self {
-            Tier::Bronze => Duration::minutes(30),
-            Tier::Silver => Duration::hours(1),
-            Tier::Gold => Duration::hours(2),
-        }
-    }
-
-    /// The dearest ticket it works on, in coins; None for any
+    /// The dearest ticket a coin charm works on, in coins; None for any
     pub fn reach(self) -> Option<i64> {
         match self {
             Tier::Bronze => Some(60),
@@ -113,41 +119,87 @@ impl Charm {
         Some(Charm { kind: Kind::parse(kind)?, tier: Tier::parse(tier)? })
     }
 
-    /// Percent: off the price, chance of a second draw, or coins added
-    pub fn strength(self) -> i64 {
-        match (self.kind, self.tier) {
-            (Kind::Discount, Tier::Bronze) => 15,
-            (Kind::Discount, Tier::Silver) => 20,
-            (Kind::Discount, Tier::Gold) => 25,
-            (Kind::Luck | Kind::Payout, Tier::Bronze) => 20,
-            (Kind::Luck | Kind::Payout, Tier::Silver) => 25,
-            (Kind::Luck | Kind::Payout, Tier::Gold) => 30,
+    /// Uses before it is spent: tickets, or missed days for a shield. The
+    /// charms that only last a time have one, never spent.
+    pub fn charges(self) -> i32 {
+        let t = self.tier.at();
+        match self.kind {
+            Kind::Discount | Kind::Luck | Kind::Payout => [5, 8, 12][t],
+            Kind::Scholar => [10, 20, 40][t],
+            Kind::Hourglass | Kind::Quest => 1,
+            Kind::Shield => [1, 2, 3][t],
         }
     }
 
-    /// Shop price. Set by the payback rule tested below.
-    pub fn price(self) -> i64 {
-        match (self.kind, self.tier) {
-            (Kind::Discount, Tier::Bronze) => 40,
-            (Kind::Discount, Tier::Silver) => 210,
-            (Kind::Discount, Tier::Gold) => 1_350,
-            (Kind::Luck | Kind::Payout, Tier::Bronze) => 50,
-            (Kind::Luck | Kind::Payout, Tier::Silver) => 260,
-            (Kind::Luck | Kind::Payout, Tier::Gold) => 1_600,
+    /// How long it lasts once bought
+    pub fn lasts(self) -> Duration {
+        let t = self.tier.at();
+        match self.kind {
+            Kind::Scholar => [Duration::hours(1), Duration::hours(2), Duration::hours(4)][t],
+            Kind::Shield => Duration::days([7, 14, 30][t]),
+            _ => [Duration::minutes(30), Duration::hours(1), Duration::hours(2)][t],
+        }
+    }
+
+    /// The dearest ticket it works on (coin charms); None for any
+    pub fn reach(self) -> Option<i64> {
+        if self.kind.on_coins() { self.tier.reach() } else { None }
+    }
+
+    /// Percent: off the price, chance of a second draw, coins or experience
+    /// added; how much faster for the hourglass and quest charms
+    pub fn strength(self) -> i64 {
+        let t = self.tier.at();
+        match self.kind {
+            Kind::Discount => [15, 20, 25][t],
+            Kind::Luck | Kind::Payout => [20, 25, 30][t],
+            Kind::Scholar => [25, 50, 100][t],
+            Kind::Hourglass | Kind::Quest => 100,
+            Kind::Shield => 0,
+        }
+    }
+
+    /// Shop price for a player at `level`. Coin charms are set by the payback
+    /// rule tested below. The hourglass gives pocket tickets, which are worth
+    /// more as a player levels: it costs a little less than they are worth.
+    pub fn price(self, level: i32) -> i64 {
+        let t = self.tier.at();
+        match self.kind {
+            Kind::Discount => [40, 210, 1_350][t],
+            Kind::Luck | Kind::Payout => [50, 260, 1_600][t],
+            Kind::Scholar => [60, 150, 400][t],
+            Kind::Quest => [100, 250, 500][t],
+            Kind::Shield => [300, 700, 1_500][t],
+            Kind::Hourglass => {
+                // Extra tickets: the minutes it lasts over the refill's, at 95 % of their worth
+                let (minutes, refill) = (self.lasts().num_minutes(), crate::pocket::REFILL.num_minutes());
+                (minutes * crate::pocket::worth(level) * 95 + refill * 100 - 1) / (refill * 100)
+            }
         }
     }
 
     /// Works on this series: a shop ticket within the tier's reach. Luck also
     /// needs a ticket drawn whole up front, not played move by move or dug.
+    /// Experience counts on every ticket; the others are not about tickets.
     pub fn works_on(self, series: Series) -> bool {
+        match self.kind {
+            Kind::Scholar => return true,
+            Kind::Hourglass | Kind::Quest | Kind::Shield => return false,
+            _ => {}
+        }
         let Some(price) = series.price() else { return false };
         if self.tier.reach().is_some_and(|max| price > max) {
             return false;
         }
         match self.kind {
             Kind::Luck => !series.is_played() && !series.is_dig(),
-            Kind::Discount | Kind::Payout => true,
+            _ => true,
         }
+    }
+
+    /// Scholar: the extra experience on top of what a ticket gave
+    pub fn more_xp(self, xp: i64) -> i64 {
+        if self.kind == Kind::Scholar { xp * self.strength() / 100 } else { 0 }
     }
 
     /// The price of a ticket with this discount
@@ -197,16 +249,17 @@ mod tests {
     /// and the fewest tickets are bought (one per charge of the charm with most).
     fn payback(charms: &[Charm]) -> f64 {
         let p = charms.iter().map(|c| worst_price(c.tier)).fold(f64::MAX, f64::min);
-        let tickets = charms.iter().map(|c| c.tier.charges()).max().unwrap_or(0) as f64;
+        let tickets = charms.iter().map(|c| c.charges()).max().unwrap_or(0) as f64;
         let value = PAYBACK * p;
         let mut back = tickets * value;
-        let mut spent = tickets * p + charms.iter().map(|c| c.price() as f64).sum::<f64>();
+        let mut spent = tickets * p + charms.iter().map(|c| c.price(1) as f64).sum::<f64>();
         for c in charms {
-            let n = c.tier.charges() as f64;
+            let n = c.charges() as f64;
             let s = c.strength() as f64 / 100.0;
             match c.kind {
                 Kind::Discount => spent -= n * p * s,
-                Kind::Luck | Kind::Payout => back += n * value * s,
+                // Luck and payout (only coin charms come here)
+                _ => back += n * value * s,
             }
         }
         back / spent
@@ -215,17 +268,48 @@ mod tests {
     /// A charm makes heavy play cheaper, never profitable (game design)
     #[test]
     fn charms_never_make_play_pay() {
-        for c in Charm::all() {
+        for c in Charm::all().into_iter().filter(|c| c.kind.on_coins()) {
             let r = payback(&[c]);
             assert!(r <= 0.95, "{:?} {:?} pays back {r:.3}", c.kind, c.tier);
             // And it is worth having on the tickets it was made for
             assert!(r > PAYBACK, "{:?} {:?} pays back only {r:.3}", c.kind, c.tier);
         }
         for tier in Tier::ALL {
-            let all: Vec<Charm> = Kind::ALL.into_iter().map(|kind| Charm { kind, tier }).collect();
+            let all: Vec<Charm> =
+                Kind::ALL.into_iter().filter(|k| k.on_coins()).map(|kind| Charm { kind, tier }).collect();
             let r = payback(&all);
             assert!(r <= 0.98, "all {tier:?} charms together pay back {r:.3}");
         }
+    }
+
+    /// An hourglass's extra pocket tickets are worth a bit more than it costs
+    /// to someone who claims them all, never twice its price, at any level
+    #[test]
+    fn an_hourglass_costs_about_what_its_tickets_are_worth() {
+        for level in [1, 2, 5, 10, 30, 50] {
+            for tier in Tier::ALL {
+                let c = Charm { kind: Kind::Hourglass, tier };
+                let extra = c.lasts().num_minutes() as f64 / crate::pocket::REFILL.num_minutes() as f64;
+                let worth = extra * PAYBACK * crate::pocket::worth(level) as f64;
+                let r = worth / c.price(level) as f64;
+                assert!((0.85..=1.0).contains(&r), "{tier:?} at level {level}: {r:.3}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_charms_beyond_coins() {
+        let scholar = Charm { kind: Kind::Scholar, tier: Tier::Gold };
+        assert_eq!(scholar.more_xp(30), 30, "double");
+        assert!(scholar.works_on(Series::Rocket) && scholar.works_on(Series::Golden), "every ticket");
+        assert_eq!(Charm { kind: Kind::Payout, tier: Tier::Gold }.more_xp(30), 0);
+        let shield = Charm { kind: Kind::Shield, tier: Tier::Silver };
+        assert_eq!((shield.charges(), shield.lasts()), (2, Duration::days(14)));
+        assert!(
+            !shield.works_on(Series::LuckyThree)
+                && !Charm { kind: Kind::Quest, tier: Tier::Bronze }.works_on(Series::LuckyThree)
+        );
+        assert_eq!(Charm { kind: Kind::Hourglass, tier: Tier::Gold }.charges(), 1, "time only");
     }
 
     #[test]
@@ -233,10 +317,9 @@ mod tests {
         for kind in Kind::ALL {
             let [b, s, g] = Tier::ALL.map(|tier| Charm { kind, tier });
             assert!(b.strength() <= s.strength() && s.strength() <= g.strength());
-            assert!(b.price() < s.price() && s.price() < g.price());
+            assert!(b.price(10) < s.price(10) && s.price(10) < g.price(10));
+            assert!(b.charges() <= g.charges() && b.lasts() < g.lasts());
         }
-        assert!(Tier::Bronze.charges() < Tier::Gold.charges());
-        assert!(Tier::Bronze.lasts() < Tier::Gold.lasts());
     }
 
     #[test]

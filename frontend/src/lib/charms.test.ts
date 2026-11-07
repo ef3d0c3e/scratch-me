@@ -38,5 +38,6 @@ describe('charms', () => {
 		expect(duration(30)).toBe('30 min');
 		expect(duration(60)).toBe('1 h');
 		expect(duration(90)).toBe('1 h 30');
+		expect(duration(7 * 1440)).toBe('7 d');
 	});
 });

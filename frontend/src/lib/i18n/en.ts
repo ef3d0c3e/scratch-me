@@ -756,5 +756,23 @@ export default {
 	'bundle.halloween': 'Halloween Treats',
 	'bundle.halloween.lead': 'Three Pumpkin Patches at triple pay, while the season lasts.',
 	'bundle.winter': 'Winter Wonderland',
-	'bundle.winter.lead': 'Three Snowballs at double pay with a second chance, this winter only.'
+	'bundle.winter.lead': 'Three Snowballs at double pay with a second chance, this winter only.',
+
+	'charm.scholar': 'Scholar charm',
+	'charm.scholar.effect': '+{n}% experience on every ticket',
+	'charm.scholar.use': 'One use per ticket scratched.',
+	'charm.hourglass': 'Hourglass charm',
+	'charm.hourglass.effect': 'Your pocket refills twice as fast',
+	'charm.hourglass.use': 'For as long as it lasts; its price follows your pocket’s worth.',
+	'charm.quest': 'Compass charm',
+	'charm.quest.effect': 'Quest progress counts double',
+	'charm.quest.use': 'For as long as it lasts.',
+	'charm.shield': 'Streak shield',
+	'charm.shield.effect': 'Your envelope streak survives missed days',
+	'charm.shield.use': 'One use per missed day, spent when you open the envelope.',
+	'charm.days_covered_one': '{n} missed day',
+	'charm.days_covered_other': '{n} missed days',
+	'charm.days_one': '{n} day',
+	'charm.days_other': '{n} days',
+	'lobby.shielded': '🛡️ streak kept'
 } as const;

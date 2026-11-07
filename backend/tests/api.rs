@@ -1567,7 +1567,7 @@ async fn charms_discount_redraw_and_add_while_they_last() {
     assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")));
     set_xp(&name, levels::xp_for(6)).await;
     let (_, shop) = get(&app, "/api/shop", &me).await;
-    assert_eq!(shop["charms"].as_array().unwrap().len(), 9);
+    assert_eq!(shop["charms"].as_array().unwrap().len(), 21);
 
     // Discount: a charge per ticket bought within its reach
     let (status, body) = buy("discount", "bronze").await;
@@ -1779,4 +1779,63 @@ async fn baccarat_higher_lower_gem_mine_and_keno_play_out() {
     let (_, body) = play(id, json!({ "pick": 19 })).await;
     assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 100 }));
     assert_eq!(body["view"]["matches"], 3);
+}
+
+#[actix_web::test]
+async fn scholar_quest_hourglass_and_shield_charms() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("charm4");
+    let me = register(&app, &name, "UTC").await;
+    set_coins(&name, 50_000).await;
+    set_xp(&name, levels::xp_for(6)).await;
+    let uid = user_id(&name).await;
+    let buy = async |kind: &str, tier: &str| {
+        post_json(&app, "/api/shop/buy", &me, json!({ "kind": "charm", "charm": { "kind": kind, "tier": tier } })).await
+    };
+    let sql = async |q: &str| {
+        diesel::sql_query(q).bind::<diesel::sql_types::BigInt, _>(uid).execute(&mut conn().await).await.unwrap();
+    };
+
+    // The hourglass costs by the player's level: 30 minutes are 1.5 pocket tickets at level 6's worth
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    let glass =
+        shop["charms"].as_array().unwrap().iter().find(|c| c["kind"] == "hourglass" && c["tier"] == "bronze").unwrap();
+    assert_eq!(glass["price"], (30 * pocket::worth(6) * 95 + 1999) / 2000);
+
+    // Scholar: double experience on a ticket scratched
+    assert_eq!(buy("scholar", "gold").await.0, 200);
+    let layout = json!({ "cells": vec!["clover"; 9], "win": "clover" });
+    let id = known_ticket(&name, "lucky_three", layout.clone(), json!({ "kind": "coins", "amount": 50 })).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(body["progress"]["xp_gained"], 17 * 2, "10 + 5 for the win + 2 for the coins, doubled");
+
+    // Quest charm: a scratch counts twice toward Scratch 5
+    set_quests(&name, &[("scratch_5", 0), ("pocket", 0), ("buy", 0)]).await;
+    assert_eq!(buy("quest", "bronze").await.0, 200);
+    let id = known_ticket(&name, "lucky_three", layout, json!({ "kind": "coins", "amount": 50 })).await;
+    post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    let (_, q) = get(&app, "/api/quests", &me).await;
+    let scratch = q["items"].as_array().unwrap().iter().find(|i| i["key"] == "scratch_5").unwrap();
+    assert_eq!(scratch["progress"], 2);
+
+    // Hourglass: an empty pocket refills twice as fast while it lasts
+    sql("UPDATE users SET pocket_count = 0, pocket_at = now() - interval '11 minutes' WHERE id = $1").await;
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["pocket"]["count"], 0);
+    assert_eq!(buy("hourglass", "bronze").await.0, 200);
+    sql("UPDATE charms SET bought_at = now() - interval '11 minutes' WHERE kind = 'hourglass' AND user_id = $1").await;
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["pocket"]["count"], 1, "11 fast minutes are 22 of refill");
+
+    // Shield: a missed day is covered, a charge spent, the streak goes on
+    sql("INSERT INTO streaks (user_id, day, best, last_claim) VALUES ($1, 4, 4, current_date - 2)").await;
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["envelope"]["streak"], 0, "broken without a shield");
+    assert_eq!(buy("shield", "bronze").await.0, 200);
+    let (_, me_body) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_body["envelope"]["streak"], 4, "kept by the shield");
+    let (_, body) = post(&app, "/api/envelope/claim", &me).await;
+    assert_eq!((body["day"].as_i64(), body["shielded"].as_bool()), (Some(5), Some(true)));
+    assert!(body["charms"].as_array().unwrap().iter().all(|c| c["kind"] != "shield"), "its one charge spent");
 }

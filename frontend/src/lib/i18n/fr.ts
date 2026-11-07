@@ -769,5 +769,23 @@ export default {
 	'bundle.halloween.lead': 'Trois Champs de Citrouilles payés triple, le temps de la saison.',
 	'bundle.winter': 'Féerie d’hiver',
 	'bundle.winter.lead':
-		'Trois Boules de Neige payées double avec une seconde chance, cet hiver seulement.'
+		'Trois Boules de Neige payées double avec une seconde chance, cet hiver seulement.',
+
+	'charm.scholar': 'Porte-bonheur du savant',
+	'charm.scholar.effect': '+{n} % d’expérience sur chaque ticket',
+	'charm.scholar.use': 'Une utilisation par ticket gratté.',
+	'charm.hourglass': 'Sablier',
+	'charm.hourglass.effect': 'Votre poche se remplit deux fois plus vite',
+	'charm.hourglass.use': 'Tant qu’il dure ; son prix suit la valeur de votre poche.',
+	'charm.quest': 'Boussole',
+	'charm.quest.effect': 'La progression des quêtes compte double',
+	'charm.quest.use': 'Tant qu’elle dure.',
+	'charm.shield': 'Bouclier de série',
+	'charm.shield.effect': 'Votre série d’enveloppes survit aux jours manqués',
+	'charm.shield.use': 'Une utilisation par jour manqué, dépensée à l’ouverture de l’enveloppe.',
+	'charm.days_covered_one': '{n} jour manqué',
+	'charm.days_covered_other': '{n} jours manqués',
+	'charm.days_one': '{n} jour',
+	'charm.days_other': '{n} jours',
+	'lobby.shielded': '🛡️ série gardée'
 } satisfies Record<keyof typeof en, string>;

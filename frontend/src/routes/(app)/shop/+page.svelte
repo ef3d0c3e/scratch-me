@@ -5,7 +5,16 @@
 	import { getSession } from '#lib/session.svelte.ts';
 	import { SERIES_LOOK, cosmeticKey } from '#lib/series.ts';
 	import type { Bought, Charm, CharmKind, Cosmetic, MeDto, TicketDto } from '#lib/types.ts';
-	import { CHARM_ICON, CHARM_KINDS, duration, going, ticketPrice } from '#lib/charms.ts';
+	import {
+		CHARM_ICON,
+		CHARM_KINDS,
+		duration,
+		going,
+		onTickets,
+		ticketPrice,
+		timeLeft,
+		usesText
+	} from '#lib/charms.ts';
 	import { countdown } from '#lib/time.ts';
 	import { onMount } from 'svelte';
 	import { achievementName } from '#lib/prize.ts';
@@ -307,8 +316,8 @@
 							<p class="worn {worn.tier}">
 								{i18n.t(`charm.tier.${worn.tier}`)} ·
 								{i18n.t('shop.charm_worn', {
-									left: i18n.t('charm.left', { n: worn.charges }),
-									time: countdown(worn.expires_at, now)
+									left: usesText(i18n, worn.kind, worn.charges, true) || '✓',
+									time: timeLeft(i18n, worn.expires_at, now)
 								})}
 							</p>
 						{/if}
@@ -320,13 +329,17 @@
 										>{i18n.t(`charm.${offer.kind}.effect`, { n: offer.strength })}</span
 									>
 									<span class="terms"
-										>{i18n.t('charm.uses', { n: offer.charges })} · {duration(offer.minutes)}</span
+										>{[usesText(i18n, offer.kind, offer.charges), duration(offer.minutes)]
+											.filter(Boolean)
+											.join(' · ')}</span
 									>
-									<span class="terms"
-										>{offer.reach === null
-											? i18n.t('charm.reach_any')
-											: i18n.t('charm.reach', { n: offer.reach })}</span
-									>
+									{#if onTickets(offer.kind)}
+										<span class="terms"
+											>{offer.reach === null
+												? i18n.t('charm.reach_any')
+												: i18n.t('charm.reach', { n: offer.reach })}</span
+										>
+									{/if}
 									{#if session.me.level.level < offer.level}
 										<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
 									{:else}

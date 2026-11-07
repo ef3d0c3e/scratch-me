@@ -2,8 +2,7 @@
 	import { onMount } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getSession } from '#lib/session.svelte.ts';
-	import { CHARM_ICON, going } from '#lib/charms.ts';
-	import { countdown } from '#lib/time.ts';
+	import { CHARM_ICON, going, timeLeft, usesText } from '#lib/charms.ts';
 
 	const i18n = getI18n();
 	const session = getSession();
@@ -28,8 +27,8 @@
 						<small>{i18n.t(`charm.${c.kind}.effect`, { n: c.strength })}</small>
 					</span>
 					<span class="left">
-						<b class="num">{i18n.t('charm.left', { n: c.charges })}</b>
-						<span class="num">⏳ {countdown(c.expires_at, now)}</span>
+						<b class="num">{usesText(i18n, c.kind, c.charges, true)}</b>
+						<span class="num">⏳ {timeLeft(i18n, c.expires_at, now)}</span>
 					</span>
 				</li>
 			{/each}

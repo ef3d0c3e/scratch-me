@@ -165,7 +165,8 @@ export interface MeDto {
 	charms: WornCharm[];
 }
 
-export type CharmKind = 'discount' | 'luck' | 'payout';
+export type CharmKind =
+	'discount' | 'luck' | 'payout' | 'scholar' | 'hourglass' | 'quest' | 'shield';
 export type CharmTier = 'bronze' | 'silver' | 'gold';
 
 export interface Charm {
@@ -355,6 +356,9 @@ export interface PocketClaim {
 }
 
 export interface EnvelopeClaim {
+	/** A streak shield covered missed days */
+	shielded: boolean;
+	charms: WornCharm[];
 	day: number;
 	contents: Contents;
 	coins: number;
