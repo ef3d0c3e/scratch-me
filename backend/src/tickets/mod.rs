@@ -37,6 +37,7 @@ pub mod push_luck;
 pub mod rocket;
 pub mod roulette;
 pub mod safe_cracker;
+pub mod seals;
 pub mod snowball;
 pub mod tic_tac_toe;
 pub mod ticket_chain;
@@ -375,6 +376,8 @@ pub enum Source {
     /// Bought for the player by another one
     Gift,
     Duel,
+    /// One of a bundle's tickets
+    Bundle,
 }
 
 impl Source {
@@ -387,6 +390,7 @@ impl Source {
             Source::Reward => "reward",
             Source::Gift => "gift",
             Source::Duel => "duel",
+            Source::Bundle => "bundle",
         }
     }
 }
@@ -407,21 +411,44 @@ pub(crate) fn weighted<'a, T>(rng: &mut impl Rng, table: &'a [(T, u32)]) -> &'a 
 /// The expected value in coins of a ticket of `series`, measured by drawing:
 /// what tests compare to prices. Tickets won count at their own value.
 #[cfg(test)]
-pub(crate) fn measured_value(series: Series, n: usize, rng: &mut impl Rng) -> f64 {
-    fn value(prize: &Prize, depth: u32, rng: &mut impl Rng) -> f64 {
-        let ticket = |s: Series, rng: &mut _| {
-            if depth > 6 { 0.0 } else { value(&s.draw(rng).prize, depth + 1, rng) }
-        };
-        match prize {
-            Prize::Nothing | Prize::PocketRefill => 0.0,
-            Prize::Coins { amount } => *amount as f64,
-            Prize::Ticket { series } => ticket(*series, rng),
-            Prize::Tickets { series } => series.iter().map(|s| ticket(*s, rng)).sum(),
-            // Valued at what they pay as a duplicate
-            Prize::Cosmetic { .. } => crate::cosmetics::DUPLICATE_COINS as f64,
-            Prize::Bundle { items } => items.iter().map(|p| value(p, depth, rng)).sum(),
-        }
+pub(crate) fn prize_value(prize: &Prize, depth: u32, rng: &mut impl Rng) -> f64 {
+    let ticket = |s: Series, rng: &mut _| {
+        if depth > 6 { 0.0 } else { prize_value(&s.draw(rng).prize, depth + 1, rng) }
+    };
+    match prize {
+        Prize::Nothing | Prize::PocketRefill => 0.0,
+        Prize::Coins { amount } => *amount as f64,
+        Prize::Ticket { series } => ticket(*series, rng),
+        Prize::Tickets { series } => series.iter().map(|s| ticket(*s, rng)).sum(),
+        // Valued at what they pay as a duplicate
+        Prize::Cosmetic { .. } => crate::cosmetics::DUPLICATE_COINS as f64,
+        Prize::Bundle { items } => items.iter().map(|p| prize_value(p, depth, rng)).sum(),
     }
+}
+
+/// The best a ticket played by choice pays back with good play (each game's
+/// own tests keep it below this): what sealed played tickets are valued at
+#[cfg(test)]
+pub(crate) const PLAYED_PAYBACK: f64 = 0.92;
+
+/// The expected value of a ticket of `series` under a seal
+#[cfg(test)]
+pub(crate) fn sealed_value(series: Series, seal: seals::Seal, n: usize, rng: &mut impl Rng) -> f64 {
+    if series.is_played() || series.is_dig() {
+        return series.price().expect("a shop ticket") as f64 * PLAYED_PAYBACK * seal.times as f64;
+    }
+    (0..n)
+        .map(|_| {
+            let prize = seal.draw(series, rng).prize;
+            prize_value(&prize, 0, rng) + seal.bonus(&prize) as f64
+        })
+        .sum::<f64>()
+        / n as f64
+}
+
+#[cfg(test)]
+pub(crate) fn measured_value(series: Series, n: usize, rng: &mut impl Rng) -> f64 {
+    let value = prize_value;
     (0..n)
         .map(|_| {
             let drawn = series.draw(rng);

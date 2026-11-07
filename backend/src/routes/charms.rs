@@ -130,6 +130,8 @@ pub(crate) struct Boost {
     pub payout: bool,
     /// Coins it added
     pub bonus: i64,
+    /// Coins a seal added (a ticket from a bundle)
+    pub seal: i64,
 }
 
 /// A losing ticket being scratched: a luck charm may draw it again. The new
@@ -188,6 +190,9 @@ impl Boost {
         }
         if self.payout {
             m.charm_used(Kind::Payout, self.bonus);
+        }
+        if self.seal > 0 {
+            m.earned("seal", self.seal);
         }
     }
 }

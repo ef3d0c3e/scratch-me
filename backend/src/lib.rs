@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod bundles;
 pub mod charms;
 pub mod config;
 pub mod cosmetics;

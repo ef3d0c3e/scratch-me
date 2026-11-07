@@ -3,7 +3,7 @@ import { GRIDS, giveTicket, newPlayer, setCoins, setLevel, visit } from './helpe
 
 test('charms wait for a level', async ({ page }) => {
 	await newPlayer(page);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	const bargain = page.locator('li[data-charm="discount"]');
 	await expect(bargain.locator('[data-tier="bronze"]')).toContainText('Level 2');
 	await expect(bargain.locator('[data-tier="gold"]')).toContainText('Level 6');
@@ -14,7 +14,7 @@ test('a bargain charm takes its share off tickets until its uses run out', async
 	const name = await newPlayer(page);
 	await setLevel(name, 6);
 	await setCoins(name, 2000);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	await page.getByRole('button', { name: 'Buy Bronze Bargain charm' }).click();
 	await expect(page.getByText('Bronze Bargain charm is yours')).toBeVisible();
 	await expect(page.getByTestId('coins')).toHaveText('1,960');
@@ -24,10 +24,13 @@ test('a bargain charm takes its share off tickets until its uses run out', async
 	await expect(page.getByRole('button', { name: 'Buy Gold Bargain charm' })).toBeDisabled();
 
 	// 15 % off Lucky Three (35): 30. The Cash Wheel (400) is beyond bronze's reach.
-	await expect(page.getByRole('button', { name: 'Buy Lucky Three' })).toHaveText(/35\s*🪙 30/);
+	await page.getByRole('tab', { name: 'Tier 3' }).click();
 	await expect(page.getByRole('button', { name: 'Buy Cash Wheel' })).toHaveText('🪙 400');
+	await page.getByRole('tab', { name: 'Tier 1' }).click();
+	await expect(page.getByRole('button', { name: 'Buy Lucky Three' })).toHaveText(/35\s*🪙 30/);
 	await page.getByRole('button', { name: 'Buy Lucky Three' }).click();
 	await expect(page.getByTestId('coins')).toHaveText('1,930');
+	await page.getByRole('tab', { name: 'Charms & Style' }).click();
 	await expect(card).toContainText('4 uses left');
 
 	// The lobby shows what is worn
@@ -41,7 +44,7 @@ test('a Midas charm adds to the coins a ticket pays', async ({ page }) => {
 	const name = await newPlayer(page);
 	await setLevel(name, 6);
 	await setCoins(name, 2000);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	await page.getByRole('button', { name: 'Buy Gold Midas charm' }).click();
 	await expect(page.getByTestId('coins')).toHaveText('400');
 	await giveTicket(name, { kind: 'coins', amount: 100 }, GRIDS.coin, 'coin');

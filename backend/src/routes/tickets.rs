@@ -15,6 +15,7 @@ use crate::progress::{self, Event, Progress, Scratch};
 use crate::routes::charms::{self, Boost, WornCharm};
 use crate::schema::{aquarium, cosmetics, tickets, users};
 use crate::tickets::play;
+use crate::tickets::seals::{self, Seal};
 use crate::tickets::treasure_dig::{self, Layout as DigLayout, Spot};
 use crate::tickets::{Prize, Series, Source};
 
@@ -27,9 +28,11 @@ pub struct TicketDto {
     pub created_at: DateTime<Utc>,
     /// Who sent it, for a gift
     pub from: Option<String>,
+    /// From a bundle: its seal's key
+    pub seal: Option<String>,
 }
 
-/// Sent with its tier, which comes from the series
+/// Sent with its tier, which comes from the series, and its seal in full
 impl Serialize for TicketDto {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
@@ -40,6 +43,7 @@ impl Serialize for TicketDto {
             created_at: DateTime<Utc>,
             from: &'a Option<String>,
             tier: Option<u8>,
+            seal: Option<seals::Seal>,
         }
         Out {
             id: self.id,
@@ -48,6 +52,7 @@ impl Serialize for TicketDto {
             created_at: self.created_at,
             from: &self.from,
             tier: Series::parse(&self.series).and_then(Series::tier),
+            seal: self.seal.as_deref().and_then(seals::seal),
         }
         .serialize(s)
     }
@@ -61,6 +66,18 @@ pub(crate) async fn issue(
     source: Source,
     n: i32,
 ) -> ApiResult<Vec<TicketDto>> {
+    issue_with(conn, user_id, series, source, n, None).await
+}
+
+/// Draws `n` tickets of `series` under a seal (or none) and gives them to the player
+pub(crate) async fn issue_with(
+    conn: &mut AsyncPgConnection,
+    user_id: i64,
+    series: Series,
+    source: Source,
+    n: i32,
+    seal: Option<Seal>,
+) -> ApiResult<Vec<TicketDto>> {
     if n <= 0 {
         return Ok(Vec::new());
     }
@@ -68,20 +85,31 @@ pub(crate) async fn issue(
         let mut rng = rand::rng();
         (0..n)
             .map(|_| {
-                let drawn = series.draw(&mut rng);
+                let drawn = match seal {
+                    Some(seal) => seal.draw(series, &mut rng),
+                    None => series.draw(&mut rng),
+                };
                 (
                     tickets::user_id.eq(user_id),
                     tickets::series.eq(series.key()),
                     tickets::layout.eq(drawn.layout),
                     tickets::prize.eq(serde_json::to_value(drawn.prize).expect("prize serializes")),
                     tickets::source.eq(source.key()),
+                    tickets::seal.eq(seal.map(|s| s.key)),
                 )
             })
             .collect()
     };
     let issued = diesel::insert_into(tickets::table)
         .values(&rows)
-        .returning((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
+        .returning((
+            tickets::id,
+            tickets::series,
+            tickets::source,
+            tickets::created_at,
+            tickets::from_name,
+            tickets::seal,
+        ))
         .get_results(conn)
         .await?;
     Ok(issued)
@@ -103,7 +131,14 @@ pub(crate) async fn issue_drawn(
             tickets::prize.eq(serde_json::to_value(drawn.prize).expect("prize serializes")),
             tickets::source.eq(source.key()),
         ))
-        .returning((tickets::id, tickets::series, tickets::source, tickets::created_at, tickets::from_name))
+        .returning((
+            tickets::id,
+            tickets::series,
+            tickets::source,
+            tickets::created_at,
+            tickets::from_name,
+            tickets::seal,
+        ))
         .get_result(conn)
         .await?)
 }
@@ -211,6 +246,8 @@ pub struct Scratched {
     pub second_chance: bool,
     /// Coins a payout charm added to the prize
     pub charm_bonus: i64,
+    /// Coins its seal added to the prize
+    pub seal_bonus: i64,
     /// Charms worn after this ticket
     pub charms: Vec<WornCharm>,
     pub progress: Progress,
@@ -231,7 +268,7 @@ pub async fn scratch(
     let out = conn
         .transaction(async move |conn| {
             // Only one request can flip scratched_at: a double tap pays once
-            let row: Option<(String, serde_json::Value, serde_json::Value)> = diesel::update(
+            let row: Option<(String, serde_json::Value, serde_json::Value, Option<String>)> = diesel::update(
                 tickets::table
                     .filter(tickets::id.eq(id))
                     .filter(tickets::user_id.eq(uid))
@@ -240,11 +277,11 @@ pub async fn scratch(
                     .filter(diesel::dsl::not(tickets::series.eq_any(play::GAMES.iter().map(|s| s.key())))),
             )
             .set(tickets::scratched_at.eq(Utc::now()))
-            .returning((tickets::series, tickets::layout, tickets::prize))
+            .returning((tickets::series, tickets::layout, tickets::prize, tickets::seal))
             .get_result(conn)
             .await
             .optional()?;
-            let Some((series, mut layout, prize)) = row else {
+            let Some((series, mut layout, prize, seal)) = row else {
                 let exists: bool = diesel::select(diesel::dsl::exists(
                     tickets::table.filter(tickets::id.eq(id)).filter(tickets::user_id.eq(uid)),
                 ))
@@ -265,15 +302,22 @@ pub async fn scratch(
             };
             let mut prize: Prize = serde_json::from_value(prize).map_err(|e| ApiError::Internal(e.into()))?;
             let kind = Series::parse(&series).ok_or_else(|| ApiError::Internal(anyhow::anyhow!("series {series}")))?;
+            let seal = seal.as_deref().and_then(seals::seal);
             let mut boost = Boost::default();
-            charms::luck(conn, uid, id, kind, &mut layout, &mut prize, &mut boost).await?;
+            // A sealed ticket's payout is its seal's: charms leave it alone
+            if seal.is_none() {
+                charms::luck(conn, uid, id, kind, &mut layout, &mut prize, &mut boost).await?;
+            }
             let g = grant(conn, uid, &prize, Source::Prize).await?;
-            charms::payout(conn, uid, kind, &prize, &mut boost).await?;
+            if seal.is_none() {
+                charms::payout(conn, uid, kind, &prize, &mut boost).await?;
+            }
+            seal_bonus(conn, uid, seal, &prize, &mut boost).await?;
             if kind == Series::Fishing {
                 record_catch(conn, uid, &layout).await?;
             }
             let extra = if g.duplicate { DUPLICATE_COINS } else { 0 };
-            let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra + boost.bonus));
+            let event = Event::Scratched(Scratch::of(kind, &layout, &prize, extra + boost.bonus + boost.seal));
             let progress = progress::apply(conn, uid, &[event]).await?;
             Ok::<_, ApiError>(Scratched {
                 id,
@@ -285,6 +329,7 @@ pub async fn scratch(
                 duplicate: g.duplicate,
                 second_chance: boost.second_chance,
                 charm_bonus: boost.bonus,
+                seal_bonus: boost.seal,
                 charms: charms::worn(conn, uid).await?,
                 progress,
                 boost,
@@ -298,7 +343,7 @@ pub async fn scratch(
     state.metrics.progress(&out.progress);
     out.boost.count(&state.metrics);
     if let Some(series) = Series::parse(&out.series) {
-        let s = Scratch::of(series, &out.layout, &out.prize, extra + out.charm_bonus);
+        let s = Scratch::of(series, &out.layout, &out.prize, extra + out.charm_bonus + out.seal_bonus);
         crate::live::broadcast(&state.live, &user.username, Some((series, &s, &out.prize)), &out.progress.achievements);
     }
     Ok(web::Json(out))
@@ -424,9 +469,14 @@ async fn finish(
         .execute(conn)
         .await?;
     let g = grant(conn, uid, &prize, Source::Prize).await?;
+    let seal: Option<String> = tickets::table.find(id).select(tickets::seal).first(conn).await?;
+    let seal = seal.as_deref().and_then(seals::seal);
     let mut boost = Boost::default();
-    charms::payout(conn, uid, series, &prize, &mut boost).await?;
-    let event = Event::Scratched(Scratch::of(series, &layout, &prize, boost.bonus));
+    if seal.is_none() {
+        charms::payout(conn, uid, series, &prize, &mut boost).await?;
+    }
+    seal_bonus(conn, uid, seal, &prize, &mut boost).await?;
+    let event = Event::Scratched(Scratch::of(series, &layout, &prize, boost.bonus + boost.seal));
     let progress = progress::apply(conn, uid, &[event]).await?;
     Ok(Scratched {
         id,
@@ -438,10 +488,27 @@ async fn finish(
         duplicate: false,
         second_chance: false,
         charm_bonus: boost.bonus,
+        seal_bonus: boost.seal,
         charms: charms::worn(conn, uid).await?,
         progress,
         boost,
     })
+}
+
+/// A finished ticket's seal multiplies its coins: the extra is paid here
+async fn seal_bonus(
+    conn: &mut AsyncPgConnection,
+    uid: i64,
+    seal: Option<Seal>,
+    prize: &Prize,
+    boost: &mut Boost,
+) -> ApiResult<()> {
+    let Some(seal) = seal else { return Ok(()) };
+    boost.seal = seal.bonus(prize);
+    if boost.seal > 0 {
+        diesel::update(users::table.find(uid)).set(users::coins.eq(users::coins + boost.seal)).execute(conn).await?;
+    }
+    Ok(())
 }
 
 /// Tells everyone about a finished ticket worth it, once committed
@@ -450,7 +517,7 @@ fn announce(state: &AppState, user: &str, series: Series, done: &Scratched) {
     state.metrics.issued(&done.tickets);
     state.metrics.progress(&done.progress);
     done.boost.count(&state.metrics);
-    let s = Scratch::of(series, &done.layout, &done.prize, done.charm_bonus);
+    let s = Scratch::of(series, &done.layout, &done.prize, done.charm_bonus + done.seal_bonus);
     crate::live::broadcast(&state.live, user, Some((series, &s, &done.prize)), &done.progress.achievements);
 }
 

@@ -1,12 +1,41 @@
 import { expect, test } from '@playwright/test';
 import { newPlayer, setCoins, setLevel, visit } from './helpers';
 
-test('the better tickets wait for a level', async ({ page }) => {
+test('the shop opens on bundles; each tier has its tab, opening with a level', async ({ page }) => {
 	await newPlayer(page);
 	await visit(page, '/shop');
+	await expect(page.getByRole('tab', { name: 'Bundles' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.locator('li[data-bundle]').first()).toHaveAttribute('data-bundle', 'starter');
+	await page.getByRole('tab', { name: 'Tier 3' }).click();
+	await expect(page).toHaveURL(/tab=tier3/);
+	await expect(page.getByText('Opens at level 6')).toBeVisible();
 	await expect(page.locator('li[data-series="cash_wheel"]')).toContainText('Level 6');
 	await expect(page.getByRole('button', { name: 'Buy Cash Wheel' })).toHaveCount(0);
+	await page.getByRole('tab', { name: 'Tier 1' }).click();
 	await expect(page.getByRole('button', { name: 'Buy Lucky Three' })).toBeEnabled();
+	await expect(page.locator('li[data-series="pot_ticket"]')).toHaveCount(0);
+});
+
+test('a bundle puts its sealed tickets in the stack', async ({ page }) => {
+	await newPlayer(page);
+	await visit(page, '/shop');
+	const starter = page.locator('li[data-bundle="starter"]');
+	await expect(starter).toContainText('Second chance on a loss');
+	await starter.getByRole('button', { name: 'Buy Starter Pack' }).click();
+	await expect(page.getByText('Starter Pack is in your stack')).toBeVisible();
+	await expect(page.getByTestId('coins')).toHaveText('300');
+	await visit(page, '/');
+	await expect(page.getByText('4 tickets to scratch')).toBeVisible();
+	// The pile shows the top three; all four carry the seal
+	await expect(page.locator('.stub[data-seal="sunrise"]')).toHaveCount(3);
+	const me = await (await page.request.get('/api/me')).json();
+	expect(me.tickets.map((t: { seal: { key: string } }) => t.seal.key)).toEqual(
+		Array(4).fill('sunrise')
+	);
+	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.locator('[data-seal="sunrise"]').first()).toBeVisible();
+	await expect(sheet.getByText('Bundle', { exact: true })).toBeVisible();
 });
 
 test('buying a ticket puts it in the stack, ready to scratch', async ({ page }) => {
@@ -14,11 +43,12 @@ test('buying a ticket puts it in the stack, ready to scratch', async ({ page }) 
 	await setLevel(name, 6);
 	await visit(page, '/');
 	await page.getByRole('link', { name: /Shop/ }).click();
+	await page.getByRole('tab', { name: 'Tier 3' }).click();
 	await page.getByRole('button', { name: 'Buy Cash Wheel' }).click();
 	await expect(page.getByTestId('coins')).toHaveText('100');
 	await expect(page.getByText('Cash Wheel is in your stack')).toBeVisible();
-	// 100 coins left: Number Match (150) is out of reach
-	await expect(page.getByRole('button', { name: 'Buy Number Match' })).toBeDisabled();
+	// 100 coins left: Mystery Boxes (260) is out of reach
+	await expect(page.getByRole('button', { name: 'Buy Mystery Boxes' })).toBeDisabled();
 	await page.getByRole('button', { name: 'Scratch it now' }).click();
 	await expect(page.getByRole('dialog', { name: 'Cash Wheel' })).toBeVisible();
 });
@@ -26,7 +56,7 @@ test('buying a ticket puts it in the stack, ready to scratch', async ({ page }) 
 test('a theme bought and worn stays on after a reload', async ({ page }) => {
 	const name = await newPlayer(page);
 	await setCoins(name, 2000);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	await expect(page.locator('li[data-item="theme:neon"]')).toContainText('Golden Ticket only');
 	await page.getByRole('button', { name: 'Buy Sunset' }).click();
 	await expect(page.getByText('Sunset is yours')).toBeVisible();
@@ -42,7 +72,7 @@ test('a theme bought and worn stays on after a reload', async ({ page }) => {
 test('a tool in use shows under the finger while scratching', async ({ page }) => {
 	const name = await newPlayer(page);
 	await setCoins(name, 2000);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	await page.getByRole('button', { name: 'Buy Key' }).click();
 	await page.getByRole('button', { name: 'Use Key' }).click();
 	await page.getByRole('link', { name: /Lobby/ }).click();
@@ -59,7 +89,7 @@ test('a tool in use shows under the finger while scratching', async ({ page }) =
 
 test('a bought ticket, once scratched, is no longer offered to scratch', async ({ page }) => {
 	await newPlayer(page);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=tier1');
 	await page.getByRole('button', { name: 'Buy Lucky Three' }).click();
 	await page.getByRole('button', { name: 'Scratch it now' }).click();
 	const sheet = page.getByRole('dialog');
@@ -94,7 +124,7 @@ test('a ticket scratched in another tab is dropped, not an error', async ({ page
 
 test('buying does not move the list: taps in a row hit the same button', async ({ page }) => {
 	await newPlayer(page);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=tier1');
 	const buy = page.getByRole('button', { name: 'Buy Lucky Three' });
 	const before = (await buy.boundingBox())!;
 	await buy.click();

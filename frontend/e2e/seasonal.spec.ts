@@ -50,14 +50,16 @@ test('Snowball rolls and grows before it pays', async ({ page }) => {
 test('the shop sells what is in season, with its last day', async ({ page }) => {
 	const name = await newPlayer(page);
 	await setCoins(name, 1000);
-	await visit(page, '/shop');
 	const shop = await (await page.request.get('/api/shop')).json();
 	const pumpkin = shop.tickets.find((t: { series: string }) => t.series === 'pumpkin_patch');
 	const snow = shop.tickets.find((t: { series: string }) => t.series === 'snowball');
+	// Pumpkin Patch is a tier 2 ticket, Snowball a tier 1
+	await visit(page, '/shop?tab=tier2');
 	await expect(page.locator('li[data-series="pumpkin_patch"]')).toHaveCount(pumpkin ? 1 : 0);
+	if (pumpkin) await expect(page.locator('li[data-series="pumpkin_patch"]')).toContainText('Until');
+	await visit(page, '/shop?tab=tier1');
 	await expect(page.locator('li[data-series="snowball"]')).toHaveCount(snow ? 1 : 0);
-	const seasonal = pumpkin ?? snow;
-	if (seasonal)
-		await expect(page.locator(`li[data-series="${seasonal.series}"]`)).toContainText('Until');
+	if (snow) await expect(page.locator('li[data-series="snowball"]')).toContainText('Until');
+	await visit(page, '/shop?tab=style');
 	await expect(page.locator('li[data-item="theme:spooky"]')).toContainText('Trophy: Pumpkin king');
 });

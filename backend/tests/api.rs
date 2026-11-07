@@ -1635,3 +1635,65 @@ async fn one_charm_of_a_kind_even_bought_at_once() {
     let (_, body) = get(&app, "/api/me", &me).await;
     assert_eq!(body["coins"], 1_000 - 260, "the refused one paid nothing");
 }
+
+async fn seal_ticket(id: i64, seal: &str) {
+    use schema::tickets;
+    diesel::update(tickets::table.find(id)).set(tickets::seal.eq(seal)).execute(&mut conn().await).await.unwrap();
+}
+
+#[actix_web::test]
+async fn bundles_issue_sealed_tickets_whose_seal_pays() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("bundle");
+    let me = register(&app, &name, "UTC").await;
+    set_coins(&name, 10_000).await;
+
+    let (_, shop) = get(&app, "/api/shop", &me).await;
+    let bundles = shop["bundles"].as_array().unwrap();
+    assert_eq!(bundles[0]["key"], "starter", "the cheapest first");
+    let beach = bundles.iter().find(|b| b["key"] == "beach").unwrap();
+    assert_eq!(beach["level"], 6, "holds a tier 3 ticket");
+    assert_eq!(beach["seal"]["times"], 2);
+
+    let buy = |key: &str| post_json(&app, "/api/shop/buy", &me, json!({ "kind": "bundle", "bundle": key }));
+    let (status, body) = buy("beach").await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("level_too_low")));
+    let (status, body) = buy("starter").await;
+    assert_eq!(status, 200);
+    assert_eq!(body["coins"], 10_000 - 200);
+    let tickets = body["tickets"].as_array().unwrap();
+    assert_eq!(tickets.len(), 4);
+    for t in tickets {
+        assert_eq!(
+            (t["source"].as_str(), t["seal"]["key"].as_str(), t["tier"].as_i64()),
+            (Some("bundle"), Some("sunrise"), Some(1))
+        );
+    }
+    let (_, me_now) = get(&app, "/api/me", &me).await;
+    assert_eq!(me_now["tickets"].as_array().unwrap().iter().filter(|t| t["seal"]["key"] == "sunrise").count(), 4);
+    assert_eq!(buy("nope").await.0, 422);
+
+    // A Diamond seal: ten times the coins, and charms leave it alone
+    set_xp(&name, levels::xp_for(6)).await;
+    post_json(&app, "/api/shop/buy", &me, json!({ "kind": "charm", "charm": { "kind": "payout", "tier": "gold" } }))
+        .await;
+    let layout = json!({ "cells": vec!["coin"; 9], "win": "coin" });
+    let id = known_ticket(&name, "lucky_three", layout, json!({ "kind": "coins", "amount": 100 })).await;
+    seal_ticket(id, "diamond").await;
+    let (_, before) = get(&app, "/api/me", &me).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!((body["seal_bonus"].as_i64(), body["charm_bonus"].as_i64()), (Some(900), Some(0)));
+    assert_eq!(body["coins"].as_i64().unwrap(), before["coins"].as_i64().unwrap() + 1000);
+    assert_eq!(charm(&app, &me, "payout").await["charges"], 12, "no charge spent on a sealed ticket");
+
+    // A played ticket under a Beach seal: its end pays double
+    let id =
+        known_ticket(&name, "coin_flip", json!({ "bets": [80, 50], "flip": "heads" }), json!({ "kind": "nothing" }))
+            .await;
+    seal_ticket(id, "beach").await;
+    let (_, body) =
+        post_json(&app, &format!("/api/tickets/{id}/play"), &me, json!({ "move": { "side": "heads" } })).await;
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 80 }));
+    assert_eq!(body["done"]["seal_bonus"], 80);
+}

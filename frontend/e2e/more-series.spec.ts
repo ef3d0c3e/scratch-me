@@ -84,7 +84,7 @@ test('Plinko drops every ball before paying their bins', async ({ page }) => {
 test('a foil bought and worn covers the tickets', async ({ page }) => {
 	const name = await newPlayer(page);
 	await setCoins(name, 3000);
-	await visit(page, '/shop');
+	await visit(page, '/shop?tab=style');
 	const gold = page.locator('li[data-item="foil:gold"]');
 	await gold.getByRole('button', { name: 'Buy Gold' }).click();
 	await gold.getByRole('button', { name: 'Use Gold' }).click();

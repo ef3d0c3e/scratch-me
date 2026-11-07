@@ -92,5 +92,6 @@ test('a Golden Ticket tool lands in the shop, and a second one pays coins', asyn
 	await expect(page.getByTestId('coins')).toHaveText('1,300');
 
 	await page.getByRole('link', { name: /Shop/ }).click();
+	await page.getByRole('tab', { name: 'Charms & Style' }).click();
 	await expect(page.getByRole('button', { name: 'Use Laser' })).toBeVisible();
 });

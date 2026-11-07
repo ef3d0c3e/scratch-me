@@ -9,6 +9,8 @@
 	import PotCard from '#lib/components/PotCard.svelte';
 	import DuelsCard from '#lib/components/DuelsCard.svelte';
 	import CharmsWorn from '#lib/components/CharmsWorn.svelte';
+	import SealBadge from '#lib/components/SealBadge.svelte';
+	import { paperOf } from '#lib/seals.ts';
 	import { getLive } from '#lib/live.svelte.ts';
 	import { feedText } from '#lib/prize.ts';
 	import { getSession } from '#lib/session.svelte.ts';
@@ -169,8 +171,11 @@
 						style:--k={stack.length - 1 - i}
 						style:--edge={SERIES_LOOK[t.series].edge}
 						style:--edge-ink={SERIES_LOOK[t.series].ink}
+						style:--paper-2={paperOf(t)}
+						data-seal={t.seal?.key}
 					>
 						<span class="stub-name">{i18n.t(`series.${t.series}`)}</span>
+						{#if t.seal}<span class="stub-seal"><SealBadge seal={t.seal} small /></span>{/if}
 						<span class="stub-foil"></span>
 						<span class="stub-src"
 							>{t.from ? i18n.t('stub.from', { name: t.from }) : i18n.t(`source.${t.source}`)}</span
@@ -406,6 +411,11 @@
 	.pile:hover .stub:last-child,
 	.pile:focus-visible .stub:last-child {
 		transform: translateY(-6px) rotate(-2deg);
+	}
+	.stub-seal {
+		position: absolute;
+		top: 6px;
+		right: 10px;
 	}
 	.stub-name {
 		font: 400 18px/1 var(--display);

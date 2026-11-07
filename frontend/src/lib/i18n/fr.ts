@@ -616,5 +616,40 @@ export default {
 	'errors.called_already': 'Vous avez déjà choisi.',
 	'errors.bet_already': 'Votre mise est déjà placée.',
 	'errors.shot_already': 'Vous avez déjà tiré ici.',
-	'errors.no_such_cell': 'Cette case n’existe pas.'
+	'errors.no_such_cell': 'Cette case n’existe pas.',
+
+	'shop.tab.bundles': 'Lots',
+	'shop.tab.style': 'Porte-bonheur & Style',
+	'shop.tier': 'Rang {n}',
+	'shop.tier_lead.1':
+		'Les tickets de tous les jours : pas chers, rapides, et plein de petits gains.',
+	'shop.tier_lead.2': 'Des tickets plus gros, aux prix plus gros.',
+	'shop.tier_lead.3':
+		'Pour les gros joueurs : les tickets les plus chers et les plus gros jackpots.',
+	'shop.tier_opens': 'Ouvert au niveau {n}',
+	'shop.bundles_lead':
+		'Plusieurs tickets d’un coup, chacun sous le sceau du lot : il multiplie, garantit ou retente le gain.',
+	'shop.bundle_holds': 'Contient',
+	'shop.separately': '🪙 {n} à l’unité',
+	'shop.bundle_bought': '{name} est dans votre pile',
+	'bundle.starter': 'Pack de départ',
+	'bundle.starter.lead': 'Quatre tickets de tous les jours, et une seconde chance sur chacun.',
+	'bundle.beach': 'Journée à la plage',
+	'bundle.beach.lead': 'Poissons, navires et coffres enfouis, tous payés double.',
+	'bundle.casino': 'Soirée Casino',
+	'bundle.casino.lead': 'Pile ou face, roulette, cartes et rouleaux payés triple.',
+	'bundle.diamond': 'Coffret Diamant',
+	'bundle.diamond.lead': 'Cinq Triple Chance toujours gagnants, à dix fois les pièces.',
+	'bundle.cosmos': 'Coffre Cosmique',
+	'bundle.cosmos.lead': 'Les meilleurs tickets du rang supérieur, payés triple.',
+	'seal.sunrise': 'Sceau de l’aube',
+	'seal.beach': 'Sceau de la plage',
+	'seal.casino': 'Sceau du casino',
+	'seal.diamond': 'Sceau de diamant',
+	'seal.cosmos': 'Sceau cosmique',
+	'seal.times': '×{n} pièces',
+	'seal.sure': 'Toujours gagnant',
+	'seal.second': 'Seconde chance en cas de perte',
+	'source.bundle': 'Lot',
+	'scratch.seal_bonus': '🔖 +{n} pièces grâce au sceau'
 } satisfies Record<keyof typeof en, string>;

@@ -10,6 +10,11 @@
 	import { onMount } from 'svelte';
 	import { achievementName } from '#lib/prize.ts';
 	import CosmeticBadge from '#lib/components/CosmeticBadge.svelte';
+	import SealBadge from '#lib/components/SealBadge.svelte';
+	import { SEAL_LOOK, TIER_PAPER, sealEffects } from '#lib/seals.ts';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import type { BundleOffer } from '#lib/types.ts';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
@@ -24,6 +29,29 @@
 		bought && session.me.tickets.some((t) => t.id === bought?.id) ? bought : null
 	);
 	let notice = $state('');
+	/** The bundle just bought: its name over the "scratch it now" offer */
+	let boughtBundle = $state<string | null>(null);
+
+	/** Bundles first, then the tiers, then charms and cosmetics. In the URL, so a reload keeps it. */
+	const TABS = ['bundles', 'tier1', 'tier2', 'tier3', 'style'] as const;
+	type Tab = (typeof TABS)[number];
+	let tab = $state<Tab>(TABS.find((x) => x === page.url.searchParams.get('tab')) ?? 'bundles');
+	const tabLabel = (t: Tab) =>
+		t === 'bundles'
+			? i18n.t('shop.tab.bundles')
+			: t === 'style'
+				? i18n.t('shop.tab.style')
+				: i18n.t('shop.tier', { n: Number(t.slice(4)) });
+	function pick(t: Tab) {
+		notice = '';
+		error = '';
+		tab = t;
+		void goto(`?tab=${t}`, { replace: true, shallow: true });
+	}
+	const tierOf = (t: Tab) => (t.startsWith('tier') ? Number(t.slice(4)) : 0);
+	const tierOffers = $derived(data.shop.tickets.filter((o) => o.tier === tierOf(tab)));
+	/** The level a tier opens at: its cheapest ticket's */
+	const tierLevel = $derived(Math.min(...tierOffers.map((o) => o.level)));
 
 	/** Every cosmetic by kind, in the server's order, with where it comes from */
 	const groups = (['theme', 'tool', 'foil'] as const).map((kind) => ({
@@ -68,10 +96,20 @@
 			const r = await post<Bought>('/shop/buy', { kind: 'ticket', series });
 			session.apply(r.progress);
 			session.me.charms = r.charms;
+			boughtBundle = null;
 			if (r.ticket) {
 				session.add([r.ticket]);
 				bought = r.ticket;
 			}
+		});
+
+	const buyBundle = (b: BundleOffer) =>
+		run(`bundle:${b.key}`, async () => {
+			const r = await post<Bought>('/shop/buy', { kind: 'bundle', bundle: b.key });
+			session.apply(r.progress);
+			session.add(r.tickets);
+			bought = r.tickets[0] ?? null;
+			boughtBundle = i18n.t(`bundle.${b.key}` as never);
 		});
 
 	const buyCharm = (charm: Charm) =>
@@ -116,7 +154,11 @@
 			<p class="err" role="alert">{error}</p>
 		{:else if fresh}
 			<div class="bought">
-				<p>{i18n.t('shop.bought', { name: i18n.t(`series.${fresh.series}`) })}</p>
+				<p>
+					{boughtBundle
+						? i18n.t('shop.bundle_bought', { name: boughtBundle })
+						: i18n.t('shop.bought', { name: i18n.t(`series.${fresh.series}`) })}
+				</p>
 				<button type="button" class="btn primary small" onclick={() => session.scratch(fresh)}
 					>{i18n.t('shop.scratch_now')}</button
 				>
@@ -126,159 +168,232 @@
 		{/if}
 	</div>
 
-	<section aria-labelledby="tickets-title">
-		<h2 id="tickets-title">{i18n.t('shop.tickets')}</h2>
-		<ul class="offers">
-			{#each data.shop.tickets as offer (offer.series)}
-				{@const look = SERIES_LOOK[offer.series]}
-				<li
-					class="offer ticket"
-					style:--edge={look.edge}
-					style:--edge-ink={look.ink}
-					data-series={offer.series}
-				>
-					<div class="what">
-						<h3>{i18n.t(`series.${offer.series}`)}</h3>
-						<p>{i18n.t(`series.${offer.series}.rules`)}</p>
-						{#if offer.until}
-							<span class="season"
-								>⏳ {i18n.t('shop.until', {
-									date: new Date(2000, offer.until[0] - 1, offer.until[1]).toLocaleDateString(
-										i18n.lang,
-										{
-											day: 'numeric',
-											month: 'long'
-										}
-									)
-								})}</span
-							>
-						{/if}
-					</div>
-					{#if session.me.level.level < offer.level}
-						<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
-					{:else}
-						{@const cost = ticketPrice(session.me.charms, offer.price, now)}
-						<button
-							type="button"
-							class="btn small primary"
-							disabled={busy !== null || session.me.coins < cost.price}
-							onclick={() => buyTicket(offer.series)}
-							aria-label="{i18n.t('shop.buy')} {i18n.t(`series.${offer.series}`)}"
-							title={cost.saved ? i18n.t('shop.saved', { n: cost.saved }) : undefined}
-							>{#if cost.saved}<s class="was">{i18n.num(offer.price)}</s>{/if}🪙 {i18n.num(
-								cost.price
-							)}</button
-						>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
+	<div class="tabs" role="tablist" aria-label={i18n.t('shop.title')}>
+		{#each TABS as t (t)}
+			<button
+				type="button"
+				role="tab"
+				id="tab-{t}"
+				aria-selected={tab === t}
+				aria-controls="panel"
+				class:on={tab === t}
+				onclick={() => pick(t)}>{tabLabel(t)}</button
+			>
+		{/each}
+	</div>
 
-	<section aria-labelledby="charms-title" class="charm-shop">
-		<h2 id="charms-title">{i18n.t('shop.charms')}</h2>
-		<p class="lead">{i18n.t('shop.charms_lead')}</p>
-		<ul class="offers">
-			{#each charmGroups as group (group.kind)}
-				{@const worn = wornOf(group.kind)}
-				<li class="offer charm" data-charm={group.kind}>
-					<div class="charm-head">
-						<span class="charm-icon" aria-hidden="true">{CHARM_ICON[group.kind]}</span>
-						<div>
-							<h3>{i18n.t(`charm.${group.kind}`)}</h3>
-							<p>{i18n.t(`charm.${group.kind}.use`)}</p>
-						</div>
-					</div>
-					{#if worn}
-						<p class="worn {worn.tier}">
-							{i18n.t(`charm.tier.${worn.tier}`)} ·
-							{i18n.t('shop.charm_worn', {
-								left: i18n.t('charm.left', { n: worn.charges }),
-								time: countdown(worn.expires_at, now)
-							})}
-						</p>
-					{/if}
-					<div class="tiers">
-						{#each group.offers as offer (offer.tier)}
-							<div class="tier {offer.tier}" data-tier={offer.tier}>
-								<b>{i18n.t(`charm.tier.${offer.tier}`)}</b>
-								<span class="effect"
-									>{i18n.t(`charm.${offer.kind}.effect`, { n: offer.strength })}</span
-								>
-								<span class="terms"
-									>{i18n.t('charm.uses', { n: offer.charges })} · {duration(offer.minutes)}</span
-								>
-								<span class="terms"
-									>{offer.reach === null
-										? i18n.t('charm.reach_any')
-										: i18n.t('charm.reach', { n: offer.reach })}</span
-								>
-								{#if session.me.level.level < offer.level}
-									<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
-								{:else}
-									<button
-										type="button"
-										class="btn small primary"
-										disabled={busy !== null || !!worn || session.me.coins < offer.price}
-										onclick={() => buyCharm({ kind: offer.kind, tier: offer.tier })}
-										aria-label={i18n.t('charm.buy', {
-											tier: i18n.t(`charm.tier.${offer.tier}`),
-											name: i18n.t(`charm.${offer.kind}`)
-										})}>🪙 {i18n.num(offer.price)}</button
-									>
-								{/if}
+	{#if tab === 'bundles'}
+		<div id="panel" role="tabpanel" aria-labelledby="tab-bundles">
+			<p class="lead">{i18n.t('shop.bundles_lead')}</p>
+			<ul class="offers">
+				{#each data.shop.bundles as b (b.key)}
+					{@const look = SEAL_LOOK[b.seal.theme]}
+					<li
+						class="offer bundle"
+						data-bundle={b.key}
+						style:--wax={look.wax}
+						style:--paper-2={look.paper}
+					>
+						<div class="bundle-head">
+							<SealBadge seal={b.seal} />
+							<div>
+								<h3>{i18n.t(`bundle.${b.key}` as never)}</h3>
+								<p>{i18n.t(`bundle.${b.key}.lead` as never)}</p>
 							</div>
-						{/each}
-					</div>
-				</li>
-			{/each}
-		</ul>
-	</section>
-
-	{#each groups as group (group.title)}
-		<section>
-			<h2>{i18n.t(group.title)}</h2>
-			<ul class="offers grid">
-				{#each group.offers as { item, origin } (keyOf(item))}
-					{@const p = origin.kind === 'shop' ? origin.price : undefined}
-					{@const owned = session.owns(item) || origin.kind === 'default'}
-					<li class="offer cosmetic" class:wearing={wearing(item)} data-item={keyOf(item)}>
-						<CosmeticBadge {item} />
-						<h3>{i18n.t(cosmeticKey(item))}</h3>
-						{#if wearing(item)}
-							<span class="tag">{i18n.t('shop.wearing')}</span>
-						{:else if owned}
-							<button
-								type="button"
-								class="btn small"
-								disabled={busy !== null}
-								onclick={() => wear(item)}
-								aria-label="{i18n.t('shop.wear')} {i18n.t(cosmeticKey(item))}"
-								>{i18n.t('shop.wear')}</button
-							>
-						{:else if p !== undefined}
+						</div>
+						<p class="effects">
+							{i18n.t(`seal.${b.seal.key}` as never)}: {sealEffects(i18n, b.seal).join(' · ')}
+						</p>
+						<ul class="contents" aria-label={i18n.t('shop.bundle_holds')}>
+							{#each b.tickets as t, i (i)}
+								<li
+									style:--edge={SERIES_LOOK[t.series].edge}
+									style:--tier-paper={TIER_PAPER[t.tier ?? 1]}
+								>
+									{i18n.t(`series.${t.series}`)}
+									{#if t.tier}<small>{i18n.t('shop.tier', { n: t.tier })}</small>{/if}
+								</li>
+							{/each}
+						</ul>
+						<div class="bundle-foot">
+							<span class="separately">{i18n.t('shop.separately', { n: b.separately })}</span>
+							{#if session.me.level.level < b.level}
+								<span class="tag locked">🔒 {i18n.t('shop.level', { n: b.level })}</span>
+							{:else}
+								<button
+									type="button"
+									class="btn small primary"
+									disabled={busy !== null || session.me.coins < b.price}
+									onclick={() => buyBundle(b)}
+									aria-label="{i18n.t('shop.buy')} {i18n.t(`bundle.${b.key}` as never)}"
+									>🪙 {i18n.num(b.price)}</button
+								>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{:else if tab !== 'style'}
+		<div id="panel" role="tabpanel" aria-labelledby="tab-{tab}" data-tier={tierOf(tab)}>
+			<p class="lead">
+				{i18n.t(`shop.tier_lead.${tierOf(tab)}` as never)}
+				{#if session.me.level.level < tierLevel}
+					<b class="opens">🔒 {i18n.t('shop.tier_opens', { n: tierLevel })}</b>
+				{/if}
+			</p>
+			<ul class="offers">
+				{#each tierOffers as offer (offer.series)}
+					{@const look = SERIES_LOOK[offer.series]}
+					<li
+						class="offer ticket"
+						style:--edge={look.edge}
+						style:--edge-ink={look.ink}
+						data-series={offer.series}
+					>
+						<div class="what">
+							<h3>{i18n.t(`series.${offer.series}`)}</h3>
+							<p>{i18n.t(`series.${offer.series}.rules`)}</p>
+							{#if offer.until}
+								<span class="season"
+									>⏳ {i18n.t('shop.until', {
+										date: new Date(2000, offer.until[0] - 1, offer.until[1]).toLocaleDateString(
+											i18n.lang,
+											{
+												day: 'numeric',
+												month: 'long'
+											}
+										)
+									})}</span
+								>
+							{/if}
+						</div>
+						{#if session.me.level.level < offer.level}
+							<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
+						{:else}
+							{@const cost = ticketPrice(session.me.charms, offer.price, now)}
 							<button
 								type="button"
 								class="btn small primary"
-								disabled={busy !== null || session.me.coins < p}
-								onclick={() => buyCosmetic(item)}
-								aria-label="{i18n.t('shop.buy')} {i18n.t(cosmeticKey(item))}"
-								>🪙 {i18n.num(p)}</button
+								disabled={busy !== null || session.me.coins < cost.price}
+								onclick={() => buyTicket(offer.series)}
+								aria-label="{i18n.t('shop.buy')} {i18n.t(`series.${offer.series}`)}"
+								title={cost.saved ? i18n.t('shop.saved', { n: cost.saved }) : undefined}
+								>{#if cost.saved}<s class="was">{i18n.num(offer.price)}</s>{/if}🪙 {i18n.num(
+									cost.price
+								)}</button
 							>
-						{:else if origin.kind === 'trophy'}
-							<span class="tag locked"
-								>🏆 {i18n.t('shop.trophy', {
-									name: achievementName(i18n, origin.achievement)
-								})}</span
-							>
-						{:else}
-							<span class="tag locked">{i18n.t('shop.golden_only')}</span>
 						{/if}
 					</li>
 				{/each}
 			</ul>
+		</div>
+	{:else}
+		<section aria-labelledby="charms-title" class="charm-shop">
+			<h2 id="charms-title">{i18n.t('shop.charms')}</h2>
+			<p class="lead">{i18n.t('shop.charms_lead')}</p>
+			<ul class="offers">
+				{#each charmGroups as group (group.kind)}
+					{@const worn = wornOf(group.kind)}
+					<li class="offer charm" data-charm={group.kind}>
+						<div class="charm-head">
+							<span class="charm-icon" aria-hidden="true">{CHARM_ICON[group.kind]}</span>
+							<div>
+								<h3>{i18n.t(`charm.${group.kind}`)}</h3>
+								<p>{i18n.t(`charm.${group.kind}.use`)}</p>
+							</div>
+						</div>
+						{#if worn}
+							<p class="worn {worn.tier}">
+								{i18n.t(`charm.tier.${worn.tier}`)} ·
+								{i18n.t('shop.charm_worn', {
+									left: i18n.t('charm.left', { n: worn.charges }),
+									time: countdown(worn.expires_at, now)
+								})}
+							</p>
+						{/if}
+						<div class="tiers">
+							{#each group.offers as offer (offer.tier)}
+								<div class="tier {offer.tier}" data-tier={offer.tier}>
+									<b>{i18n.t(`charm.tier.${offer.tier}`)}</b>
+									<span class="effect"
+										>{i18n.t(`charm.${offer.kind}.effect`, { n: offer.strength })}</span
+									>
+									<span class="terms"
+										>{i18n.t('charm.uses', { n: offer.charges })} · {duration(offer.minutes)}</span
+									>
+									<span class="terms"
+										>{offer.reach === null
+											? i18n.t('charm.reach_any')
+											: i18n.t('charm.reach', { n: offer.reach })}</span
+									>
+									{#if session.me.level.level < offer.level}
+										<span class="tag locked">🔒 {i18n.t('shop.level', { n: offer.level })}</span>
+									{:else}
+										<button
+											type="button"
+											class="btn small primary"
+											disabled={busy !== null || !!worn || session.me.coins < offer.price}
+											onclick={() => buyCharm({ kind: offer.kind, tier: offer.tier })}
+											aria-label={i18n.t('charm.buy', {
+												tier: i18n.t(`charm.tier.${offer.tier}`),
+												name: i18n.t(`charm.${offer.kind}`)
+											})}>🪙 {i18n.num(offer.price)}</button
+										>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</li>
+				{/each}
+			</ul>
 		</section>
-	{/each}
+
+		{#each groups as group (group.title)}
+			<section>
+				<h2>{i18n.t(group.title)}</h2>
+				<ul class="offers grid">
+					{#each group.offers as { item, origin } (keyOf(item))}
+						{@const p = origin.kind === 'shop' ? origin.price : undefined}
+						{@const owned = session.owns(item) || origin.kind === 'default'}
+						<li class="offer cosmetic" class:wearing={wearing(item)} data-item={keyOf(item)}>
+							<CosmeticBadge {item} />
+							<h3>{i18n.t(cosmeticKey(item))}</h3>
+							{#if wearing(item)}
+								<span class="tag">{i18n.t('shop.wearing')}</span>
+							{:else if owned}
+								<button
+									type="button"
+									class="btn small"
+									disabled={busy !== null}
+									onclick={() => wear(item)}
+									aria-label="{i18n.t('shop.wear')} {i18n.t(cosmeticKey(item))}"
+									>{i18n.t('shop.wear')}</button
+								>
+							{:else if p !== undefined}
+								<button
+									type="button"
+									class="btn small primary"
+									disabled={busy !== null || session.me.coins < p}
+									onclick={() => buyCosmetic(item)}
+									aria-label="{i18n.t('shop.buy')} {i18n.t(cosmeticKey(item))}"
+									>🪙 {i18n.num(p)}</button
+								>
+							{:else if origin.kind === 'trophy'}
+								<span class="tag locked"
+									>🏆 {i18n.t('shop.trophy', {
+										name: achievementName(i18n, origin.achievement)
+									})}</span
+								>
+							{:else}
+								<span class="tag locked">{i18n.t('shop.golden_only')}</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/each}
+	{/if}
 </div>
 
 <style>
@@ -368,6 +483,97 @@
 		background: var(--night-2);
 		border: 1px solid var(--line);
 		padding: 12px;
+	}
+	.tabs {
+		display: flex;
+		gap: 6px;
+		overflow-x: auto;
+		scrollbar-width: none;
+		margin: 0 -16px;
+		padding: 2px 16px;
+	}
+	.tabs button {
+		flex: none;
+		padding: 7px 10px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: var(--night-2);
+		color: var(--muted);
+		font-weight: 700;
+		font-size: 13px;
+		white-space: nowrap;
+	}
+	.tabs button.on {
+		background: var(--gold);
+		border-color: var(--gold);
+		color: #1b1530;
+	}
+	.opens {
+		display: block;
+		margin-top: 4px;
+		color: var(--gold);
+	}
+	div[data-tier='2'] .offer.ticket {
+		--paper-2: #e6ecf5;
+	}
+	div[data-tier='3'] .offer.ticket {
+		--paper-2: #ffd970;
+	}
+	.offer.bundle {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		border-color: var(--wax);
+		box-shadow: 0 0 22px -12px var(--wax);
+	}
+	.bundle-head {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+	.bundle-head h3 {
+		font: 400 20px/1.1 var(--display);
+	}
+	.bundle-head p {
+		font-size: 13px;
+		color: var(--muted);
+		margin-top: 2px;
+	}
+	.effects {
+		font-size: 13px;
+		font-weight: 800;
+		color: var(--gold);
+	}
+	.contents {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.contents li {
+		padding: 4px 10px;
+		border-radius: 8px;
+		background: var(--tier-paper);
+		color: var(--paper-ink);
+		box-shadow: 0 0 0 2px var(--edge);
+		font-size: 12.5px;
+		font-weight: 700;
+	}
+	.contents small {
+		opacity: 0.6;
+		margin-left: 4px;
+	}
+	.bundle-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.separately {
+		font-size: 12px;
+		color: var(--muted);
 	}
 	.offer.ticket {
 		display: flex;

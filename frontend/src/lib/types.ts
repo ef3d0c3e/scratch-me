@@ -35,7 +35,32 @@ export type Series =
 	| 'poker_hand'
 	| 'mega_reels'
 	| 'platinum_three';
-export type Source = 'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel';
+export type Source =
+	'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel' | 'bundle';
+
+export type SealTheme = 'sunrise' | 'beach' | 'casino' | 'diamond' | 'cosmos';
+
+/** What a ticket from a bundle carries: its look and what it does to the prize */
+export interface Seal {
+	key: string;
+	theme: SealTheme;
+	/** Coins paid are multiplied by this */
+	times: number;
+	/** Drawn until it wins */
+	sure: boolean;
+	/** A losing draw is drawn once more */
+	second: boolean;
+}
+
+export interface BundleOffer {
+	key: string;
+	price: number;
+	level: number;
+	seal: Seal;
+	tickets: { series: Series; tier: number | null }[];
+	/** What its tickets cost one by one */
+	separately: number;
+}
 
 export type ThemeId =
 	| 'midnight'
@@ -71,6 +96,8 @@ export interface TicketDto {
 	from?: string | null;
 	/** Its shop tier, 1 to 3; none for tickets the shop does not sell */
 	tier?: number | null;
+	/** From a bundle */
+	seal?: Seal | null;
 }
 
 export interface Pocket {
@@ -259,12 +286,16 @@ export interface Scratched {
 	second_chance: boolean;
 	/** Coins a payout charm added */
 	charm_bonus: number;
+	/** Coins the ticket's seal added */
+	seal_bonus: number;
 	/** Charms worn after this ticket */
 	charms: WornCharm[];
 	progress: Progress;
 }
 
 export interface ShopDto {
+	/** Cheapest first */
+	bundles: BundleOffer[];
 	/** `until`: a seasonal series' last day on sale, as [month, day] */
 	tickets: {
 		series: Series;
@@ -281,6 +312,8 @@ export interface ShopDto {
 export interface Bought {
 	coins: number;
 	ticket: TicketDto | null;
+	/** A bundle's tickets */
+	tickets: TicketDto[];
 	/** A gift went to this player */
 	gift_to?: string | null;
 	item: Cosmetic | null;

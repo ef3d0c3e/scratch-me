@@ -13,6 +13,8 @@
 	import Celebration from './Celebration.svelte';
 	import Counter from './Counter.svelte';
 	import ScratchFoil from './ScratchFoil.svelte';
+	import SealBadge from './SealBadge.svelte';
+	import { MOTIF_SPOTS, SEAL_LOOK, paperOf } from '#lib/seals.ts';
 
 	/**
 	 * One ticket, full screen. The server uncovers it as the sheet opens (the
@@ -182,7 +184,12 @@
 	data-series={ticket.series}
 >
 	<header>
-		<span class="badge">{i18n.t(`source.${ticket.source}`)}</span>
+		<span class="badges">
+			<span class="badge">{i18n.t(`source.${ticket.source}`)}</span>
+			{#if ticket.tier}<span class="badge tier" data-shop-tier={ticket.tier}
+					>{i18n.t('shop.tier', { n: ticket.tier })}</span
+				>{/if}
+		</span>
 		<button type="button" class="close" onclick={close} aria-label={i18n.t('scratch.close')}
 			>✕</button
 		>
@@ -195,10 +202,22 @@
 		style:--edge={look.edge}
 		style:--edge-ink={look.ink}
 		style:--edge-shadow={look.shadow}
+		style:--paper-2={paperOf(ticket)}
+		data-shop-tier={ticket.tier ?? undefined}
+		data-seal={ticket.seal?.key}
 		bind:this={play}
 	>
+		{#if ticket.seal}
+			<div class="motifs" aria-hidden="true">
+				{#each MOTIF_SPOTS as [x, y], i (i)}
+					{@const m = SEAL_LOOK[ticket.seal.theme].motifs}
+					<span style:left="{x}%" style:top="{y}%">{m[i % m.length]}</span>
+				{/each}
+			</div>
+		{/if}
 		<div class="head">
 			<h2>{i18n.t(`series.${ticket.series}`)}</h2>
+			{#if ticket.seal}<span class="wax"><SealBadge seal={ticket.seal} /></span>{/if}
 		</div>
 		{#if PlayedFace}
 			<PlayedFace
@@ -249,6 +268,11 @@
 			</p>
 			<p class="sub">{sub}</p>
 			{#if result.second_chance}<p class="charm">{i18n.t('scratch.second_chance')}</p>{/if}
+			{#if result.seal_bonus > 0}
+				<p class="charm" data-testid="seal-bonus">
+					{i18n.t('scratch.seal_bonus', { n: result.seal_bonus })}
+				</p>
+			{/if}
 			{#if result.charm_bonus > 0}
 				<p class="charm">{i18n.t('scratch.charm_bonus', { n: result.charm_bonus })}</p>
 			{/if}
@@ -447,6 +471,7 @@
 		font-size: 18px;
 	}
 	.ticket {
+		position: relative;
 		width: min(420px, 100%);
 		background:
 			radial-gradient(circle at 0 50%, transparent 10px, var(--paper-2) 10.5px) left / 51% 100%
@@ -468,8 +493,57 @@
 			0 24px 60px -20px rgba(0, 0, 0, 0.8);
 	}
 	.head {
+		position: relative;
 		text-align: center;
 		margin-bottom: 10px;
+	}
+	/* The top tier's paper has a sheen */
+	.ticket[data-shop-tier='3']:not([data-seal]) {
+		background-image:
+			linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.45) 45%, transparent 60%),
+			radial-gradient(circle at 0 50%, transparent 10px, var(--paper-2) 10.5px),
+			radial-gradient(circle at 100% 50%, transparent 10px, var(--paper-2) 10.5px);
+		background-size:
+			100% 100%,
+			51% 100%,
+			51% 100%;
+		background-position:
+			0 0,
+			left,
+			right;
+		background-repeat: no-repeat;
+	}
+	/* Over the paper, under everything printed on it */
+	.ticket {
+		isolation: isolate;
+	}
+	.motifs {
+		z-index: -1;
+		position: absolute;
+		inset: 0 14px;
+		overflow: hidden;
+		pointer-events: none;
+		opacity: 0.2;
+		font-size: 22px;
+	}
+	.motifs span {
+		position: absolute;
+		transform: translate(-50%, -50%) rotate(-12deg);
+	}
+	.badges {
+		display: flex;
+		gap: 6px;
+	}
+	.wax {
+		position: absolute;
+		top: -6px;
+		right: -2px;
+	}
+	.badge.tier[data-shop-tier='2'] {
+		color: #c9d1dc;
+	}
+	.badge.tier[data-shop-tier='3'] {
+		color: var(--gold);
 	}
 	.head h2 {
 		font-size: 28px;

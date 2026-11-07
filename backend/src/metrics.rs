@@ -118,6 +118,7 @@ pub struct Metrics {
     level_ups: Counter,
     cosmetics: Family<KindLabels, Counter>,
     charms: Family<CharmLabels, Counter>,
+    bundles: Family<KeyLabels, Counter>,
     charm_uses: Family<KindLabels, Counter>,
     charm_coins: Family<KindLabels, Counter>,
     shouts: Counter,
@@ -158,6 +159,7 @@ impl Default for Metrics {
             level_ups: Default::default(),
             cosmetics: Default::default(),
             charms: Default::default(),
+            bundles: Default::default(),
             charm_uses: Default::default(),
             charm_coins: Default::default(),
             shouts: Default::default(),
@@ -188,6 +190,7 @@ impl Default for Metrics {
         r.register("achievements", "Achievements earned, by achievement", m.achievements.clone());
         r.register("level_ups", "Levels reached", m.level_ups.clone());
         r.register("cosmetics_bought", "Cosmetics bought, by kind", m.cosmetics.clone());
+        r.register("bundles_bought", "Bundles bought, by bundle", m.bundles.clone());
         r.register("charms_bought", "Charms bought, by kind and tier", m.charms.clone());
         r.register("charm_uses", "Charm charges spent, by kind", m.charm_uses.clone());
         r.register(
@@ -242,12 +245,12 @@ impl Metrics {
         self.earned("prize", coins);
     }
 
-    /// `reason`: start, prize, reward, envelope, pot, refund, charm
+    /// `reason`: start, prize, reward, envelope, pot, refund, charm, seal
     pub fn earned(&self, reason: &'static str, coins: i64) {
         self.coins_earned.get_or_create(&ReasonLabels { reason }).inc_by(coins.max(0) as u64);
     }
 
-    /// `reason`: ticket, gift, cosmetic, charm, duel_stake
+    /// `reason`: ticket, gift, cosmetic, charm, bundle, duel_stake
     pub fn spent(&self, reason: &'static str, coins: i64) {
         self.coins_spent.get_or_create(&ReasonLabels { reason }).inc_by(coins.max(0) as u64);
     }
@@ -288,6 +291,11 @@ impl Metrics {
     pub fn cosmetic(&self, kind: &'static str, price: i64) {
         self.cosmetics.get_or_create(&KindLabels { kind }).inc();
         self.spent("cosmetic", price);
+    }
+
+    pub fn bundle(&self, key: &str, price: i64) {
+        self.bundles.get_or_create(&KeyLabels { key: key.to_owned() }).inc();
+        self.spent("bundle", price);
     }
 
     pub fn charm(&self, charm: crate::charms::Charm, price: i64) {

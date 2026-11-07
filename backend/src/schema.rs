@@ -158,6 +158,7 @@ diesel::table! {
         picks -> Nullable<Jsonb>,
         from_user_id -> Nullable<Int8>,
         from_name -> Nullable<Text>,
+        seal -> Nullable<Text>,
     }
 }
 
