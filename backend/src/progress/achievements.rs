@@ -78,7 +78,7 @@ pub fn all() -> Vec<Achievement> {
         a("jackpot", At(WinAtLeast(1000)), coins(500)),
         a("quests_30", Reach(QuestsDone, 30), coins(500)),
         a("collector_5", Reach(Cosmetics, 5), coins(500)),
-        a("admiral", At(SeriesAtLeast(Series::Battleship, 130)), coins(500)),
+        a("admiral", At(SeriesAtLeast(Series::Battleship, 190)), coins(500)),
         // Seasons and their trophies
         a("deep_digger", At(DigAtLeast(1000)), cosmetic(Cosmetic::Tool(Tool::Shovel))),
         a("pumpkin_king", At(SeriesAtLeast(Series::PumpkinPatch, 400)), cosmetic(Cosmetic::Theme(Theme::Spooky))),

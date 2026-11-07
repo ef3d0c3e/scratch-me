@@ -55,12 +55,12 @@ test('Battleship: each cell is a shot, sunk ships show whole', async ({ page }) 
 			{ cells: [23, 24], coins: 5 }
 		]
 	});
-	await expect(sheet.getByTestId('shots-left')).toHaveText(/10 shots left/);
+	await expect(sheet.getByTestId('shots-left')).toHaveText(/7 shots left/);
 	for (const cell of [0, 1, 2]) {
 		await scratch(page, sheet.locator(`[data-cell="${cell}"]`));
 		await expect(sheet.locator(`[data-cell="${cell}"]`)).toHaveAttribute('data-state', 'hit');
 	}
-	await expect(sheet.getByTestId('shots-left')).toHaveText(/7 shots left · 🪙 60/);
+	await expect(sheet.getByTestId('shots-left')).toHaveText(/4 shots left · 🪙 75/);
 	await scratch(page, sheet.locator('[data-cell="12"]'));
 	await expect(sheet.locator('[data-cell="12"]')).toHaveAttribute('data-state', 'miss');
 	// The sunk ship shows; the others stay hidden

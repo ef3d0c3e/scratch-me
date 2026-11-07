@@ -397,7 +397,7 @@ export default {
 	'series.hot_spot.rules': 'Dix numéros à vous, vingt tirés : plus ils correspondent, plus ça paie',
 	'series.battleship': 'Bataille Navale',
 	'series.battleship.rules':
-		'Grattez une case pour tirer : dix tirs, chaque touche paie, couler un navire paie plus',
+		'Grattez une case pour tirer : sept tirs, chaque touche paie, couler un navire paie plus',
 	'series.board_walk': 'Tour de Plateau',
 	'series.board_walk.rules': 'Trois lancers font avancer votre pion : chaque case atteinte paie',
 	'series.fishing': 'Pêche',
@@ -660,7 +660,7 @@ export default {
 	'achievement.level_5': 'Habitué',
 	'achievement.level_5.how': 'Atteindre le niveau 5',
 	'achievement.admiral': 'Amiral',
-	'achievement.admiral.how': 'Gagner 130 pièces sur une Bataille navale',
+	'achievement.admiral.how': 'Couler toute la flotte d’une Bataille navale : 190 pièces',
 	'achievement.scratch_500': 'Accro au grattage',
 	'achievement.scratch_500.how': 'Gratter 500 tickets',
 	'achievement.green_zero': 'Sur le vert',

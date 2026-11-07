@@ -1007,13 +1007,13 @@ async fn coin_flip_roulette_and_battleship_are_played_by_choice() {
     }
     let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "cell": 5 } })).await;
     assert_eq!(body["view"]["sunk"], 1);
-    assert_eq!(body["view"]["coins"], 3 * 15 + 15);
+    assert_eq!(body["view"]["coins"], 3 * 20 + 15);
     let mut done = Value::Null;
-    for cell in [6, 7, 8, 9, 11, 12] {
+    for cell in [6, 7, 8] {
         let (_, body) = post_json(&app, &uri, &me, json!({ "move": { "cell": cell } })).await;
         done = body["done"].clone();
     }
-    assert_eq!(done["prize"], json!({ "kind": "coins", "amount": 60 }), "ten shots: three hits and a sunk ship");
+    assert_eq!(done["prize"], json!({ "kind": "coins", "amount": 75 }), "seven shots: three hits and a sunk ship");
     assert_eq!(done["layout"]["ships"].as_array().unwrap().len(), 3);
 }
 

@@ -393,7 +393,7 @@ export default {
 	'series.hot_spot.rules': 'Ten numbers of yours, twenty drawn: the more match, the more it pays',
 	'series.battleship': 'Battleship',
 	'series.battleship.rules':
-		'Scratch a cell to shoot: ten shots, every hit pays, sinking a ship pays more',
+		'Scratch a cell to shoot: seven shots, every hit pays, sinking a ship pays more',
 	'series.board_walk': 'Board Walk',
 	'series.board_walk.rules': 'Three rolls move your token: every square it lands on pays',
 	'series.fishing': 'Fishing',
@@ -647,7 +647,7 @@ export default {
 	'achievement.level_5': 'Regular',
 	'achievement.level_5.how': 'Reach level 5',
 	'achievement.admiral': 'Admiral',
-	'achievement.admiral.how': 'Win 130 coins on one Battleship',
+	'achievement.admiral.how': 'Sink the whole fleet in one Battleship: 190 coins',
 	'achievement.scratch_500': 'Scratch addict',
 	'achievement.scratch_500.how': 'Scratch 500 tickets',
 	'achievement.green_zero': 'On the green',

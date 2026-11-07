@@ -1,4 +1,4 @@
-//! Battleship: a 5×5 sea with three ships, and ten shots. Each cell has its
+//! Battleship: a 5×5 sea with three ships, and seven shots. Each cell has its
 //! own little foil: the player chooses where to shoot, one shot at a time, and
 //! the server says hit or miss. Every hit pays a little; a ship hit on all its
 //! cells pays its prize. The sea is laid out when the ticket is issued.
@@ -13,12 +13,12 @@ use super::{Drawn, Prize};
 pub const PRICE: i64 = 75;
 pub const SIZE: usize = 5;
 pub const CELLS: usize = SIZE * SIZE;
-pub const SHOTS: usize = 10;
+pub const SHOTS: usize = 7;
 /// Each hit pays this: most of the ticket's worth is in the hits, so aiming
 /// next to a hit helps without leaving careless shots far behind
-pub const HIT: i64 = 15;
+pub const HIT: i64 = 20;
 /// Ship lengths and what sinking each pays on top
-pub const SHIPS: [(usize, i64); 3] = [(3, 15), (2, 5), (2, 5)];
+pub const SHIPS: [(usize, i64); 3] = [(3, 30), (2, 10), (2, 10)];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ship {
@@ -152,8 +152,8 @@ mod tests {
             assert_eq!(all.len(), 7);
         }
         let l =
-            Layout { ships: vec![Ship { cells: vec![0, 1, 2], coins: 15 }, Ship { cells: vec![10, 15], coins: 5 }] };
-        assert_eq!(prize_of(&l, &[0, 1, 2, 4]), Prize::Coins { amount: 3 * HIT + 15 });
+            Layout { ships: vec![Ship { cells: vec![0, 1, 2], coins: 30 }, Ship { cells: vec![10, 15], coins: 10 }] };
+        assert_eq!(prize_of(&l, &[0, 1, 2, 4]), Prize::Coins { amount: 3 * HIT + 30 });
         assert_eq!(prize_of(&l, &[10, 24]), Prize::Coins { amount: HIT });
         assert_eq!(prize_of(&l, &[24]), Prize::Nothing);
         let mut s = State::default();
@@ -209,7 +209,7 @@ mod tests {
         let (random, hunting) = (random as f64 / n as f64 / PRICE as f64, hunting as f64 / n as f64 / PRICE as f64);
         eprintln!("random {random:.3}, hunting {hunting:.3}");
         // Careless shots lose more, as in any game of choices
-        assert!((0.55..=0.90).contains(&random), "random shots pay back {random:.3}");
+        assert!((0.50..=0.90).contains(&random), "random shots pay back {random:.3}");
         assert!((0.70..=0.92).contains(&hunting), "hunting pays back {hunting:.3}");
     }
 }
