@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { newPlayer, setCoins, setLevel, visit } from './helpers';
+import { GRIDS, giveTicket, newPlayer, setCoins, setLevel, sql, visit } from './helpers';
 
 test('the shop opens on bundles; each tier has its tab, opening with a level', async ({ page }) => {
 	await newPlayer(page);
@@ -137,4 +137,21 @@ test('buying does not move the list: taps in a row hit the same button', async (
 	}
 	await visit(page, '/');
 	await expect(page.getByText('4 tickets to scratch')).toBeVisible();
+});
+
+test('a Safety seal pays half a losing ticket back', async ({ page }) => {
+	const name = await newPlayer(page);
+	await giveTicket(name, { kind: 'nothing' }, GRIDS.lose, null);
+	await sql(
+		"UPDATE tickets SET seal = 'safety', source = 'bundle' WHERE user_id = (SELECT id FROM users WHERE username = $1)",
+		[name]
+	);
+	await visit(page, '/');
+	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.locator('[data-seal="safety"]').first()).toBeVisible();
+	await sheet.getByRole('button', { name: 'Reveal all' }).click();
+	await expect(sheet.getByTestId('seal-bonus')).toHaveText('🔖 +17 coins from the seal');
+	await sheet.getByRole('button', { name: 'Back to the lobby' }).click();
+	await expect(page.getByTestId('coins')).toHaveText('517');
 });

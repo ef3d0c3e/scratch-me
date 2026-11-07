@@ -132,6 +132,8 @@ pub(crate) struct Boost {
     pub bonus: i64,
     /// Coins a seal added (a ticket from a bundle)
     pub seal: i64,
+    /// An echo seal gave one more ticket
+    pub echo: bool,
 }
 
 /// A losing ticket being scratched: a luck charm may draw it again. The new

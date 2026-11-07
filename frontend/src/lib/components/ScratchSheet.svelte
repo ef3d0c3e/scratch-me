@@ -273,6 +273,9 @@
 					{i18n.t('scratch.seal_bonus', { n: result.seal_bonus })}
 				</p>
 			{/if}
+			{#if result.echo}
+				<p class="charm" data-testid="seal-echo">{i18n.t('scratch.echo')}</p>
+			{/if}
 			{#if result.charm_bonus > 0}
 				<p class="charm">{i18n.t('scratch.charm_bonus', { n: result.charm_bonus })}</p>
 			{/if}

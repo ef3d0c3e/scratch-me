@@ -748,5 +748,26 @@ export default {
 	'keno.left_other': '{n} choix restants',
 	'keno.matches_one': '{n} trouvé',
 	'keno.matches_other': '{n} trouvés',
-	'errors.nothing_to_cash': 'Rien à encaisser pour l’instant.'
+	'errors.nothing_to_cash': 'Rien à encaisser pour l’instant.',
+
+	'seal.fortune': 'Sceau de fortune',
+	'seal.safety': 'Sceau de secours',
+	'seal.echo': 'Sceau d’écho',
+	'seal.halloween': 'Sceau d’Halloween',
+	'seal.winter': 'Sceau d’hiver',
+	'seal.best': 'Le meilleur de {n} tirages',
+	'seal.insurance': '{n} % remboursés en cas de perte',
+	'seal.echo_effect': 'Un gain en apporte un autre',
+	'scratch.echo': '🔁 Le sceau d’écho ajoute un ticket identique',
+	'bundle.encore': 'Bis',
+	'bundle.encore.lead': 'Rouleaux et cartes : chaque gain apporte un ticket identique.',
+	'bundle.safety': 'Filet de sécurité',
+	'bundle.safety.lead': 'Quatre gros tickets, et la moitié du prix remboursée sur chaque perdant.',
+	'bundle.fortune': 'Pack Fortune',
+	'bundle.fortune.lead': 'Chaque ticket tiré trois fois : vous gardez le meilleur.',
+	'bundle.halloween': 'Friandises d’Halloween',
+	'bundle.halloween.lead': 'Trois Champs de Citrouilles payés triple, le temps de la saison.',
+	'bundle.winter': 'Féerie d’hiver',
+	'bundle.winter.lead':
+		'Trois Boules de Neige payées double avec une seconde chance, cet hiver seulement.'
 } satisfies Record<keyof typeof en, string>;

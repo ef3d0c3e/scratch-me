@@ -10,7 +10,19 @@
 	const label = $derived(
 		[i18n.t(`seal.${seal.key}` as never), ...sealEffects(i18n, seal)].join(' · ')
 	);
-	const short = $derived(seal.times > 1 ? `×${seal.times}` : seal.sure ? '✓' : '↻');
+	const short = $derived(
+		seal.times > 1
+			? `×${seal.times}`
+			: seal.sure
+				? '✓'
+				: seal.best > 1
+					? `${seal.best}↑`
+					: seal.insurance > 0
+						? `${seal.insurance}%`
+						: seal.echo
+							? '+1'
+							: '↻'
+	);
 </script>
 
 <span

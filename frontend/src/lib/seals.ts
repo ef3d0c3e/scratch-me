@@ -14,7 +14,12 @@ export const SEAL_LOOK: Record<
 	beach: { icon: '🏖️', wax: '#0ea5e9', paper: '#fbe7c0', motifs: ['🌴', '🐚', '🌊', '🦀'] },
 	casino: { icon: '🎰', wax: '#b91c1c', paper: '#d9efe0', motifs: ['♠', '♥', '♦', '♣'] },
 	diamond: { icon: '💎', wax: '#2563eb', paper: '#e3f2ff', motifs: ['💎', '✨'] },
-	cosmos: { icon: '🪐', wax: '#6d28d9', paper: '#e6defc', motifs: ['🪐', '✦', '★', '☄️'] }
+	cosmos: { icon: '🪐', wax: '#6d28d9', paper: '#e6defc', motifs: ['🪐', '✦', '★', '☄️'] },
+	fortune: { icon: '🔮', wax: '#7c3aed', paper: '#efe4ff', motifs: ['🔮', '🍀', '✨'] },
+	safety: { icon: '🛟', wax: '#dc2626', paper: '#ffe4e6', motifs: ['🛟', '⚓'] },
+	echo: { icon: '🔁', wax: '#0d9488', paper: '#d5f5ef', motifs: ['🔁', '〰️', '🎟️'] },
+	halloween: { icon: '🎃', wax: '#ea580c', paper: '#fde2c8', motifs: ['🎃', '🦇', '👻', '🕸️'] },
+	winter: { icon: '❄️', wax: '#0284c7', paper: '#e0f2fe', motifs: ['❄️', '⛄', '🌨️'] }
 };
 
 /** The ticket paper of each shop tier: plain, silver, gold */
@@ -30,6 +35,9 @@ export function sealEffects(i18n: I18n, seal: Seal): string[] {
 	if (seal.times > 1) out.push(i18n.t('seal.times', { n: seal.times }));
 	if (seal.sure) out.push(i18n.t('seal.sure'));
 	if (seal.second) out.push(i18n.t('seal.second'));
+	if (seal.best > 1) out.push(i18n.t('seal.best', { n: seal.best }));
+	if (seal.insurance > 0) out.push(i18n.t('seal.insurance', { n: seal.insurance }));
+	if (seal.echo) out.push(i18n.t('seal.echo_effect'));
 	return out;
 }
 

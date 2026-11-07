@@ -466,10 +466,14 @@ pub(crate) fn sealed_value(series: Series, seal: seals::Seal, n: usize, rng: &mu
     if series.is_played() || series.is_dig() {
         return series.price().expect("a shop ticket") as f64 * PLAYED_PAYBACK * seal.times as f64;
     }
+    let price = series.price().expect("a shop ticket");
     (0..n)
         .map(|_| {
             let prize = seal.draw(series, rng).prize;
-            prize_value(&prize, 0, rng) + seal.bonus(&prize) as f64
+            // An echo: one more of its kind, unsealed
+            let echo =
+                if seal.echo && prize != Prize::Nothing { prize_value(&series.draw(rng).prize, 0, rng) } else { 0.0 };
+            prize_value(&prize, 0, rng) + seal.bonus(&prize, price) as f64 + echo
         })
         .sum::<f64>()
         / n as f64

@@ -246,8 +246,10 @@ pub struct Scratched {
     pub second_chance: bool,
     /// Coins a payout charm added to the prize
     pub charm_bonus: i64,
-    /// Coins its seal added to the prize
+    /// Coins its seal added to the prize (a multiplier, or insurance on a loss)
     pub seal_bonus: i64,
+    /// An echo seal gave one more ticket of its kind (in `tickets`)
+    pub echo: bool,
     /// Charms worn after this ticket
     pub charms: Vec<WornCharm>,
     pub progress: Progress,
@@ -312,7 +314,7 @@ pub async fn scratch(
             if seal.is_none() {
                 charms::payout(conn, uid, kind, &prize, &mut boost).await?;
             }
-            seal_bonus(conn, uid, seal, &prize, &mut boost).await?;
+            let echoed = seal_bonus(conn, uid, seal, kind, &prize, &mut boost).await?;
             if kind == Series::Fishing {
                 record_catch(conn, uid, &mut layout).await?;
             }
@@ -325,11 +327,12 @@ pub async fn scratch(
                 layout,
                 prize,
                 coins: progress.coins,
-                tickets: g.tickets,
+                tickets: [g.tickets, echoed].concat(),
                 duplicate: g.duplicate,
                 second_chance: boost.second_chance,
                 charm_bonus: boost.bonus,
                 seal_bonus: boost.seal,
+                echo: boost.echo,
                 charms: charms::worn(conn, uid).await?,
                 progress,
                 boost,
@@ -475,7 +478,7 @@ async fn finish(
     if seal.is_none() {
         charms::payout(conn, uid, series, &prize, &mut boost).await?;
     }
-    seal_bonus(conn, uid, seal, &prize, &mut boost).await?;
+    let echoed = seal_bonus(conn, uid, seal, series, &prize, &mut boost).await?;
     let event = Event::Scratched(Scratch::of(series, &layout, &prize, boost.bonus + boost.seal));
     let progress = progress::apply(conn, uid, &[event]).await?;
     Ok(Scratched {
@@ -484,31 +487,38 @@ async fn finish(
         layout,
         prize,
         coins: progress.coins,
-        tickets: g.tickets,
+        tickets: [g.tickets, echoed].concat(),
         duplicate: false,
         second_chance: false,
         charm_bonus: boost.bonus,
         seal_bonus: boost.seal,
+        echo: boost.echo,
         charms: charms::worn(conn, uid).await?,
         progress,
         boost,
     })
 }
 
-/// A finished ticket's seal multiplies its coins: the extra is paid here
+/// A finished ticket's seal: the extra coins it pays (multiplier, insurance)
+/// are paid here, and an echo seal's ticket is issued. Answers that ticket.
 async fn seal_bonus(
     conn: &mut AsyncPgConnection,
     uid: i64,
     seal: Option<Seal>,
+    series: Series,
     prize: &Prize,
     boost: &mut Boost,
-) -> ApiResult<()> {
-    let Some(seal) = seal else { return Ok(()) };
-    boost.seal = seal.bonus(prize);
+) -> ApiResult<Vec<TicketDto>> {
+    let Some(seal) = seal else { return Ok(vec![]) };
+    boost.seal = seal.bonus(prize, series.price().unwrap_or(0));
     if boost.seal > 0 {
         diesel::update(users::table.find(uid)).set(users::coins.eq(users::coins + boost.seal)).execute(conn).await?;
     }
-    Ok(())
+    if seal.echo && *prize != Prize::Nothing {
+        boost.echo = true;
+        return issue(conn, uid, series, Source::Prize, 1).await;
+    }
+    Ok(vec![])
 }
 
 /// Tells everyone about a finished ticket worth it, once committed

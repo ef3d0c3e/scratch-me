@@ -736,5 +736,25 @@ export default {
 	'keno.left_other': '{n} picks left',
 	'keno.matches_one': '{n} match',
 	'keno.matches_other': '{n} matches',
-	'errors.nothing_to_cash': 'Nothing to cash out yet.'
+	'errors.nothing_to_cash': 'Nothing to cash out yet.',
+
+	'seal.fortune': 'Fortune seal',
+	'seal.safety': 'Safety seal',
+	'seal.echo': 'Echo seal',
+	'seal.halloween': 'Halloween seal',
+	'seal.winter': 'Winter seal',
+	'seal.best': 'Best of {n} draws',
+	'seal.insurance': '{n}% back on a loss',
+	'seal.echo_effect': 'A win brings one more',
+	'scratch.echo': '🔁 The echo seal adds one more ticket like it',
+	'bundle.encore': 'Encore',
+	'bundle.encore.lead': 'Reels and cards: every win brings one more ticket of its kind.',
+	'bundle.safety': 'Safety Net',
+	'bundle.safety.lead': 'Four bigger tickets, and half the price back on any that loses.',
+	'bundle.fortune': 'Fortune Pack',
+	'bundle.fortune.lead': 'Each ticket drawn three times: you get the best of the three.',
+	'bundle.halloween': 'Halloween Treats',
+	'bundle.halloween.lead': 'Three Pumpkin Patches at triple pay, while the season lasts.',
+	'bundle.winter': 'Winter Wonderland',
+	'bundle.winter.lead': 'Three Snowballs at double pay with a second chance, this winter only.'
 } as const;

@@ -43,7 +43,17 @@ export type Series =
 export type Source =
 	'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel' | 'bundle';
 
-export type SealTheme = 'sunrise' | 'beach' | 'casino' | 'diamond' | 'cosmos';
+export type SealTheme =
+	| 'sunrise'
+	| 'beach'
+	| 'casino'
+	| 'diamond'
+	| 'cosmos'
+	| 'fortune'
+	| 'safety'
+	| 'echo'
+	| 'halloween'
+	| 'winter';
 
 /** What a ticket from a bundle carries: its look and what it does to the prize */
 export interface Seal {
@@ -55,6 +65,12 @@ export interface Seal {
 	sure: boolean;
 	/** A losing draw is drawn once more */
 	second: boolean;
+	/** Drawn this many times, the best kept */
+	best: number;
+	/** A losing ticket pays back this share of its price, in percent */
+	insurance: number;
+	/** A winning ticket also gives a free one of its kind */
+	echo: boolean;
 }
 
 export interface BundleOffer {
@@ -293,6 +309,8 @@ export interface Scratched {
 	charm_bonus: number;
 	/** Coins the ticket's seal added */
 	seal_bonus: number;
+	/** An echo seal gave one more ticket of its kind */
+	echo: boolean;
 	/** Charms worn after this ticket */
 	charms: WornCharm[];
 	progress: Progress;

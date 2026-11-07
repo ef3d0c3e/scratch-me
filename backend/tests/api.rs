@@ -1708,6 +1708,30 @@ async fn bundles_issue_sealed_tickets_whose_seal_pays() {
         post_json(&app, &format!("/api/tickets/{id}/play"), &me, json!({ "move": { "side": "heads" } })).await;
     assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 80 }));
     assert_eq!(body["done"]["seal_bonus"], 80);
+
+    // Insurance: half a losing ticket's price back
+    let lose = json!({ "cells": ["gem", "coin", "clover", "star", "gem", "ticket", "hourglass", "coin", "star"], "win": null });
+    let id = known_ticket(&name, "lucky_three", lose, json!({ "kind": "nothing" })).await;
+    seal_ticket(id, "safety").await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(body["seal_bonus"], 17, "half of 35, rounded down");
+
+    // Echo: a win gives one more of its kind
+    let win = json!({ "cells": vec!["coin"; 9], "win": "coin" });
+    let id = known_ticket(&name, "lucky_three", win, json!({ "kind": "coins", "amount": 200 })).await;
+    seal_ticket(id, "echo").await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert_eq!(body["echo"], true);
+    assert!(body["tickets"].as_array().unwrap().iter().any(|t| t["series"] == "lucky_three" && t["seal"].is_null()));
+
+    // Seasonal bundles: only while their tickets are in season
+    let today = chrono::Utc::now().date_naive();
+    let keys: Vec<String> =
+        shop["bundles"].as_array().unwrap().iter().map(|b| b["key"].as_str().unwrap().to_owned()).collect();
+    let pumpkin = scratchme_api::tickets::Series::PumpkinPatch.in_season(today);
+    assert_eq!(keys.contains(&"halloween".to_owned()), pumpkin);
+    let (status, body) = buy(if pumpkin { "winter" } else { "halloween" }).await;
+    assert_eq!((status, body["error"].as_str()), (409, Some("out_of_season")));
 }
 
 #[actix_web::test]

@@ -83,6 +83,7 @@ pub struct ShopDto {
 #[get("/shop")]
 pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
     let today = Utc::now().date_naive();
+    let bundles_today = |b: &bundles::Bundle| b.in_season(today);
     let mut tickets: Vec<TicketOffer> = Series::ALL
         .into_iter()
         .filter(|s| s.in_shop() && s.in_season(today))
@@ -110,6 +111,7 @@ pub async fn list(_user: CurrentUser) -> web::Json<ShopDto> {
     });
     let bundles = bundles::all()
         .into_iter()
+        .filter(bundles_today)
         .map(|b| BundleOffer {
             key: b.key,
             price: b.price,
@@ -198,6 +200,9 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, body: web::Json<
                 }
                 Buy::Bundle { bundle } => {
                     let b = bundles::bundle(bundle).expect("priced above");
+                    if !b.in_season(Utc::now().date_naive()) {
+                        return Err(ApiError::Conflict("out_of_season"));
+                    }
                     let xp: i64 = users::table.find(user.id).select(users::xp).first(conn).await?;
                     if levels::level_for(xp) < b.level() {
                         return Err(ApiError::Conflict("level_too_low"));
