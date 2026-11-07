@@ -1,39 +1,49 @@
 import { expect, test } from '@playwright/test';
 import { GRIDS, giveTicket, newPlayer, setQuests, setXp, sql, visit, xpFor } from './helpers';
 
-test('a first win earns achievements and a level, announced', async ({ page }) => {
-	const name = await newPlayer(page, { fresh: true });
-	await setQuests(name, []);
-	await setXp(name, xpFor(2) - 5);
-	await giveTicket(name, { kind: 'coins', amount: 200 }, GRIDS.coin, 'coin');
-	await visit(page, '/');
-	await expect(page.getByTestId('level')).toHaveAttribute('data-level', '1');
-	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
-	await page.getByRole('dialog').getByRole('button', { name: 'Reveal all' }).click();
+/** A zone where it is noon now: no achievement of the small hours on a first scratch */
+const noon = (() => {
+	const k = (((12 - new Date().getUTCHours()) % 24) + 24) % 24;
+	return k <= 14 ? `Etc/GMT-${k}` : `Etc/GMT+${24 - k}`;
+})();
 
-	// One at a time: the level first, then the achievements
-	const toast = page.locator('.news .toast');
-	await expect(toast).toHaveAttribute('data-kind', 'level');
-	await expect(toast).toContainText('Level 2!');
-	await expect(toast).toContainText('Ticket Chain');
-	await toast.click();
-	await expect(toast).toContainText('First scratch');
-	await toast.click();
-	await expect(toast).toContainText('Beginner’s luck');
-	await toast.click();
-	await expect(toast).toContainText('Big win');
-	await expect(page.getByTestId('level')).toHaveAttribute('data-level', '2');
+test.describe('at noon', () => {
+	test.use({ timezoneId: noon });
 
-	// The level's ticket waits in the stack (opening it would scratch it)
-	await page.getByRole('dialog').getByRole('button', { name: 'Back to the lobby' }).click();
-	await expect(page.getByText('1 ticket to scratch')).toBeVisible();
-	await expect(page.locator('.stub')).toContainText('Ticket Chain');
-	await expect(page.locator('.stub')).toContainText('Reward');
+	test('a first win earns achievements and a level, announced', async ({ page }) => {
+		const name = await newPlayer(page, { fresh: true });
+		await setQuests(name, []);
+		await setXp(name, xpFor(2) - 5);
+		await giveTicket(name, { kind: 'coins', amount: 200 }, GRIDS.coin, 'coin');
+		await visit(page, '/');
+		await expect(page.getByTestId('level')).toHaveAttribute('data-level', '1');
+		await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Reveal all' }).click();
 
-	await visit(page, '/trophies');
-	await expect(page.getByText(/^3 of \d+ earned$/)).toBeVisible();
-	await expect(page.locator('li[data-achievement="big_win"]')).toContainText('🏆');
-	await expect(page.locator('li[data-achievement="scratch_100"]')).toContainText('1 / 100');
+		// One at a time: the level first, then the achievements
+		const toast = page.locator('.news .toast');
+		await expect(toast).toHaveAttribute('data-kind', 'level');
+		await expect(toast).toContainText('Level 2!');
+		await expect(toast).toContainText('Ticket Chain');
+		await toast.click();
+		await expect(toast).toContainText('First scratch');
+		await toast.click();
+		await expect(toast).toContainText('Beginner’s luck');
+		await toast.click();
+		await expect(toast).toContainText('Big win');
+		await expect(page.getByTestId('level')).toHaveAttribute('data-level', '2');
+
+		// The level's ticket waits in the stack (opening it would scratch it)
+		await page.getByRole('dialog').getByRole('button', { name: 'Back to the lobby' }).click();
+		await expect(page.getByText('1 ticket to scratch')).toBeVisible();
+		await expect(page.locator('.stub')).toContainText('Ticket Chain');
+		await expect(page.locator('.stub')).toContainText('Reward');
+
+		await visit(page, '/trophies');
+		await expect(page.getByText(/^3 of \d+ earned$/)).toBeVisible();
+		await expect(page.locator('li[data-achievement="big_win"]')).toContainText('🏆');
+		await expect(page.locator('li[data-achievement="scratch_100"]')).toContainText('1 / 100');
+	});
 });
 
 test('quests move as you play, pay once, and one can be swapped', async ({ page }) => {

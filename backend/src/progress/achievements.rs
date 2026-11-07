@@ -21,6 +21,24 @@ pub enum Metric {
     CoinsWon,
     /// Bundles bought
     Bundles,
+    /// Year-round shop series scratched at least once
+    SeriesTried,
+    /// Year-round bundles bought at least once
+    BundleKinds,
+    /// Year-round seals won under at least once
+    SealWins,
+    /// The longest run of wins, and of losses
+    BestWinRun,
+    BestLoseRun,
+    /// Hours with every quest round done
+    FullHours,
+    GiftsSent,
+    DuelsWon,
+    PotsWon,
+    /// Coin charms worn at once (discount, luck, payout)
+    CoinCharmsWorn,
+    /// The level, while the account is a week old or less (0 after)
+    LevelInFirstWeek,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +54,25 @@ pub enum Moment {
     DigAtLeast(i64),
     /// A ticket of this series paying this many coins or more
     SeriesAtLeast(Series, i64),
+    /// A ticket scratched between these hours, the player's time (from included)
+    ScratchedBetween(u32, u32),
+}
+
+/// The shop series sold all year: those "every series" counts
+pub fn year_round_series() -> Vec<Series> {
+    Series::ALL.into_iter().filter(|s| s.in_shop() && s.season().is_none()).collect()
+}
+
+/// The bundles sold all year, and the seals they carry
+pub fn year_round_bundles() -> Vec<&'static str> {
+    crate::bundles::all().into_iter().filter(|b| !b.seasonal()).map(|b| b.key).collect()
+}
+
+pub fn year_round_seals() -> Vec<&'static str> {
+    let mut seals: Vec<&'static str> =
+        crate::bundles::all().into_iter().filter(|b| !b.seasonal()).map(|b| b.seal.key).collect();
+    seals.dedup();
+    seals
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +116,13 @@ pub fn all() -> Vec<Achievement> {
         a("quests_30", Reach(QuestsDone, 30), coins(500)),
         a("collector_5", Reach(Cosmetics, 5), coins(500)),
         a("admiral", At(SeriesAtLeast(Series::Battleship, 190)), coins(500)),
+        a("hat_trick", Reach(BestWinRun, 3), coins(150)),
+        a("night_owl", At(ScratchedBetween(2, 5)), coins(200)),
+        a("early_bird", At(ScratchedBetween(5, 7)), coins(200)),
+        a("charmed", Reach(CoinCharmsWorn, 3), coins(300)),
+        a("hour_master", Reach(FullHours, 1), tickets(Series::TicketChain, 1)),
+        a("pot_luck", Reach(PotsWon, 1), coins(500)),
+        a("unlucky", Reach(BestLoseRun, 10), coins(500)),
         // Seasons and their trophies
         a("deep_digger", At(DigAtLeast(1000)), cosmetic(Cosmetic::Tool(Tool::Shovel))),
         a("pumpkin_king", At(SeriesAtLeast(Series::PumpkinPatch, 400)), cosmetic(Cosmetic::Theme(Theme::Spooky))),
@@ -97,6 +141,13 @@ pub fn all() -> Vec<Achievement> {
         a("bundles_10", Reach(Bundles, 10), coins(2000)),
         a("high_roller", At(WinAtLeast(5000)), coins(2000)),
         a("collector_10", Reach(Cosmetics, 10), coins(2000)),
+        a("fast_learner", Reach(LevelInFirstWeek, 10), golden.clone()),
+        a("generous", Reach(GiftsSent, 10), coins(1000)),
+        a("duelist", Reach(DuelsWon, 10), coins(1500)),
+        a("clockwork", Reach(FullHours, 10), golden.clone()),
+        a("tried_them_all", Reach(SeriesTried, year_round_series().len() as i64), goldens(2)),
+        a("every_bundle", Reach(BundleKinds, year_round_bundles().len() as i64), coins(3000)),
+        a("every_seal", Reach(SealWins, year_round_seals().len() as i64), coins(5000)),
         // The long road
         a("level_20", Reach(Level, 20), tickets(Series::PlatinumThree, 2)),
         a("scratch_2500", Reach(Scratched, 2500), goldens(2)),
@@ -117,10 +168,11 @@ pub fn all() -> Vec<Achievement> {
     ]
 }
 
-/// Whether an event is the moment
-pub fn caught(moment: Moment, event: &Event) -> bool {
+/// Whether an event is the moment; `hour` is the player's own hour now
+pub fn caught(moment: Moment, event: &Event, hour: u32) -> bool {
     let Event::Scratched(s) = event else { return false };
     match moment {
+        Moment::ScratchedBetween(from, to) => from <= hour && hour < to,
         Moment::WinAtLeast(n) => s.coins >= n,
         Moment::GoldenScratched => s.series == Series::Golden,
         Moment::WheelTwenty => s.wheel == Some(20),
@@ -158,15 +210,33 @@ mod tests {
         assert!(past_ten * 2 < all.len(), "{past_ten} of {} come before level 10", all.len());
     }
 
+    fn caught_at(m: Moment, e: &Event) -> bool {
+        caught(m, e, 12)
+    }
+
+    #[test]
+    fn the_hour_of_a_scratch() {
+        let s = Event::Scratched(Scratch { series: Series::LuckyThree, win: false, coins: 0, wheel: None, found: 0 });
+        assert!(caught(Moment::ScratchedBetween(2, 5), &s, 3));
+        assert!(!caught(Moment::ScratchedBetween(2, 5), &s, 5));
+        assert!(!caught(Moment::ScratchedBetween(5, 7), &Event::PocketTaken(1), 6), "a scratch, not anything");
+        let all = year_round_series();
+        assert!(
+            !all.contains(&Series::PumpkinPatch) && !all.contains(&Series::PotTicket) && all.contains(&Series::Keno)
+        );
+        assert!(!year_round_bundles().contains(&"halloween"));
+        assert!(year_round_seals().contains(&"fortune") && !year_round_seals().contains(&"winter"));
+    }
+
     #[test]
     fn moments() {
         let s = |series, coins, wheel, found| Event::Scratched(Scratch { series, win: true, coins, wheel, found });
-        assert!(caught(Moment::WinAtLeast(200), &s(Series::LuckyThree, 200, None, 0)));
-        assert!(!caught(Moment::WinAtLeast(1000), &s(Series::LuckyThree, 999, None, 0)));
-        assert!(caught(Moment::WheelTwenty, &s(Series::CashWheel, 1000, Some(20), 0)));
-        assert!(!caught(Moment::WheelTwenty, &s(Series::CashWheel, 50, Some(10), 0)));
-        assert!(caught(Moment::ChainOf(3), &s(Series::TicketChain, 0, None, 3)));
-        assert!(caught(Moment::GoldenScratched, &s(Series::Golden, 1000, None, 0)));
-        assert!(!caught(Moment::GoldenScratched, &Event::PocketTaken(2)));
+        assert!(caught_at(Moment::WinAtLeast(200), &s(Series::LuckyThree, 200, None, 0)));
+        assert!(!caught_at(Moment::WinAtLeast(1000), &s(Series::LuckyThree, 999, None, 0)));
+        assert!(caught_at(Moment::WheelTwenty, &s(Series::CashWheel, 1000, Some(20), 0)));
+        assert!(!caught_at(Moment::WheelTwenty, &s(Series::CashWheel, 50, Some(10), 0)));
+        assert!(caught_at(Moment::ChainOf(3), &s(Series::TicketChain, 0, None, 3)));
+        assert!(caught_at(Moment::GoldenScratched, &s(Series::Golden, 1000, None, 0)));
+        assert!(!caught_at(Moment::GoldenScratched, &Event::PocketTaken(2)));
     }
 }

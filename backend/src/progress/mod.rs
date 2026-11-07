@@ -20,7 +20,10 @@ pub use events::{Event, Scratch};
 
 use crate::error::ApiResult;
 use crate::routes::tickets::{TicketDto, grant};
-use crate::schema::{achievements as earned, aquarium, cosmetics, quests as quest_rows, stats, streaks, users};
+use crate::schema::{
+    achievements as earned, aquarium, collected, cosmetics, duels, pots, quests as quest_rows, stats, streaks, tickets,
+    users,
+};
 use crate::tickets::{Prize, Source};
 use achievements::{Goal, Metric};
 use levels::LevelDto;
@@ -157,6 +160,33 @@ async fn record_stats(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]) 
     .bind::<Integer, _>(bundles)
     .execute(conn)
     .await?;
+    if scratches.is_empty() {
+        return Ok(());
+    }
+    // Runs of wins and losses, scratch by scratch
+    let (mut w, mut l, mut bw, mut bl): (i32, i32, i32, i32) = stats::table
+        .find(uid)
+        .select((stats::win_run, stats::lose_run, stats::best_win_run, stats::best_lose_run))
+        .first(conn)
+        .await?;
+    for s in &scratches {
+        if s.win {
+            (w, l) = (w + 1, 0);
+        } else {
+            (w, l) = (0, l + 1);
+        }
+        (bw, bl) = (bw.max(w), bl.max(l));
+    }
+    diesel::update(stats::table.find(uid))
+        .set((stats::win_run.eq(w), stats::lose_run.eq(l), stats::best_win_run.eq(bw), stats::best_lose_run.eq(bl)))
+        .execute(conn)
+        .await?;
+    // Every series tried, for the collection
+    let rows: Vec<_> = scratches
+        .iter()
+        .map(|s| (collected::user_id.eq(uid), collected::kind.eq("series"), collected::key.eq(s.series.key())))
+        .collect();
+    diesel::insert_into(collected::table).values(rows).on_conflict_do_nothing().execute(conn).await?;
     Ok(())
 }
 
@@ -224,9 +254,25 @@ async fn advance_quests(conn: &mut AsyncPgConnection, uid: i64, events: &[Event]
             if round < quests::ROUNDS {
                 open_round(conn, uid, slot, round + 1).await?;
                 out.next_round = Some(round + 1);
+            } else {
+                // Every round of the hour done
+                diesel::update(stats::table.find(uid))
+                    .set(stats::full_hours.eq(stats::full_hours + 1))
+                    .execute(conn)
+                    .await?;
             }
         }
     }
+    Ok(())
+}
+
+/// Something collected: a series, a bundle, a seal (kept once)
+pub async fn collect(conn: &mut AsyncPgConnection, uid: i64, kind: &str, key: &str) -> ApiResult<()> {
+    diesel::insert_into(collected::table)
+        .values((collected::user_id.eq(uid), collected::kind.eq(kind), collected::key.eq(key)))
+        .on_conflict_do_nothing()
+        .execute(conn)
+        .await?;
     Ok(())
 }
 
@@ -249,6 +295,51 @@ pub async fn metric(conn: &mut AsyncPgConnection, uid: i64, m: Metric, level: i3
             let (won, bundles) = row.unwrap_or((0, 0));
             if m == Metric::CoinsWon { won } else { bundles as i64 }
         }
+        Metric::BestWinRun | Metric::BestLoseRun | Metric::FullHours => {
+            let row: Option<(i32, i32, i32)> = stats::table
+                .find(uid)
+                .select((stats::best_win_run, stats::best_lose_run, stats::full_hours))
+                .first(conn)
+                .await
+                .optional()?;
+            let (w, l, h) = row.unwrap_or((0, 0, 0));
+            (match m {
+                Metric::BestWinRun => w,
+                Metric::BestLoseRun => l,
+                _ => h,
+            }) as i64
+        }
+        Metric::SeriesTried | Metric::BundleKinds | Metric::SealWins => {
+            let (kind, keys): (&str, Vec<&str>) = match m {
+                Metric::SeriesTried => ("series", achievements::year_round_series().iter().map(|s| s.key()).collect()),
+                Metric::BundleKinds => ("bundle", achievements::year_round_bundles()),
+                _ => ("seal", achievements::year_round_seals()),
+            };
+            collected::table
+                .filter(collected::user_id.eq(uid))
+                .filter(collected::kind.eq(kind))
+                .filter(collected::key.eq_any(keys))
+                .count()
+                .get_result(conn)
+                .await?
+        }
+        Metric::GiftsSent => {
+            tickets::table
+                .filter(tickets::from_user_id.eq(uid))
+                .filter(tickets::source.eq(crate::tickets::Source::Gift.key()))
+                .count()
+                .get_result(conn)
+                .await?
+        }
+        Metric::DuelsWon => duels::table.filter(duels::winner_id.eq(uid)).count().get_result(conn).await?,
+        Metric::PotsWon => pots::table.filter(pots::winner_id.eq(uid)).count().get_result(conn).await?,
+        Metric::CoinCharmsWorn => {
+            crate::routes::charms::worn(conn, uid).await?.iter().filter(|c| c.kind.on_coins()).count() as i64
+        }
+        Metric::LevelInFirstWeek => {
+            let since: DateTime<Utc> = users::table.find(uid).select(users::created_at).first(conn).await?;
+            if Utc::now() - since <= chrono::Duration::days(7) { level as i64 } else { 0 }
+        }
         Metric::BestStreak => {
             streaks::table.find(uid).select(streaks::best).first::<i32>(conn).await.optional()?.unwrap_or(0) as i64
         }
@@ -266,13 +357,16 @@ async fn award_achievements(
     out: &mut Progress,
 ) -> ApiResult<()> {
     let have: Vec<String> = earned::table.filter(earned::user_id.eq(uid)).select(earned::id).load(conn).await?;
+    // The player's own hour, for the moments of the day
+    let tz: String = users::table.find(uid).select(users::tz).first(conn).await?;
+    let hour = chrono::Timelike::hour(&Utc::now().with_timezone(&crate::auth::parse_tz(Some(&tz))));
     for a in achievements::all() {
         if have.iter().any(|h| h == a.id) {
             continue;
         }
         let met = match a.goal {
             Goal::Reach(m, n) => metric(conn, uid, m, level).await? >= n,
-            Goal::Moment(moment) => events.iter().any(|e| achievements::caught(moment, e)),
+            Goal::Moment(moment) => events.iter().any(|e| achievements::caught(moment, e, hour)),
         };
         if !met {
             continue;

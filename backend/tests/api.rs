@@ -88,6 +88,13 @@ where
     cookie
 }
 
+/// A zone where it is noon now: no achievement of the small hours on a first scratch
+fn noon_tz() -> String {
+    let utc = chrono::Timelike::hour(&chrono::Utc::now()) as i32;
+    let k = (12 - utc).rem_euclid(24);
+    if k <= 14 { format!("Etc/GMT-{k}") } else { format!("Etc/GMT+{}", 24 - k) }
+}
+
 async fn register_fresh<S>(app: &S, name: &str, tz: &str) -> Cookie<'static>
 where
     S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
@@ -467,7 +474,7 @@ async fn scratching_gives_xp_achievements_and_levels() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("xp");
-    let me = register_fresh(&app, &name, "UTC").await;
+    let me = register_fresh(&app, &name, &noon_tz()).await;
     set_quests(&name, &[]).await;
     set_xp(&name, levels::xp_for(2) - 5).await;
     let prize = json!({ "kind": "coins", "amount": 50 });
@@ -745,7 +752,7 @@ async fn profiles_and_titles() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("pro");
-    let me = register_fresh(&app, &name, "UTC").await;
+    let me = register_fresh(&app, &name, &noon_tz()).await;
     set_quests(&name, &[]).await;
     let other = register(&app, &unique("look"), "UTC").await;
     let id = known_ticket(
@@ -889,7 +896,7 @@ async fn foils_are_worn_and_trophy_items_are_earned_not_bought() {
     let Some(state) = state().await else { return };
     let app = app!(state);
     let name = unique("foil");
-    let me = register_fresh(&app, &name, "UTC").await;
+    let me = register_fresh(&app, &name, &noon_tz()).await;
     set_quests(&name, &[]).await;
     set_coins(&name, 5000).await;
     let (_, shop) = get(&app, "/api/shop", &me).await;
@@ -1838,4 +1845,85 @@ async fn scholar_quest_hourglass_and_shield_charms() {
     let (_, body) = post(&app, "/api/envelope/claim", &me).await;
     assert_eq!((body["day"].as_i64(), body["shielded"].as_bool()), (Some(5), Some(true)));
     assert!(body["charms"].as_array().unwrap().iter().all(|c| c["kind"] != "shield"), "its one charge spent");
+}
+
+#[actix_web::test]
+async fn trophies_for_runs_charms_pots_hours_and_collections() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    // A zone where it is 3 in the morning now: the night owl's hour
+    let utc = chrono::Timelike::hour(&chrono::Utc::now()) as i32;
+    let k = (3 - utc).rem_euclid(24);
+    let tz = if k <= 14 { format!("Etc/GMT-{k}") } else { format!("Etc/GMT+{}", 24 - k) };
+    let name = unique("troph");
+    let me = register_fresh(&app, &name, &tz).await;
+    set_quests(&name, &[]).await;
+    set_coins(&name, 10_000).await;
+    set_xp(&name, levels::xp_for(6)).await;
+    let earned = |body: &Value| -> Vec<String> {
+        body["progress"]["achievements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["what"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let win = json!({ "cells": vec!["coin"; 9], "win": "coin" });
+    let lose = json!({ "cells": ["gem", "coin", "clover", "star", "gem", "ticket", "hourglass", "coin", "star"], "win": null });
+
+    // Three wins in a row; the first one in the small hours
+    let mut got = vec![];
+    for _ in 0..3 {
+        let id = known_ticket(&name, "lucky_three", win.clone(), json!({ "kind": "coins", "amount": 10 })).await;
+        let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+        got.extend(earned(&body));
+    }
+    assert!(got.contains(&"night_owl".to_owned()), "{got:?}");
+    assert!(got.contains(&"hat_trick".to_owned()), "{got:?}");
+
+    // Ten losses in a row: a consolation
+    let mut got = vec![];
+    for _ in 0..10 {
+        let id = known_ticket(&name, "lucky_three", lose.clone(), json!({ "kind": "nothing" })).await;
+        let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+        got.extend(earned(&body));
+    }
+    assert!(got.contains(&"unlucky".to_owned()), "{got:?}");
+
+    // All three coin charms at once
+    let mut got = vec![];
+    for kind in ["discount", "luck", "payout"] {
+        let (_, body) = post_json(
+            &app,
+            "/api/shop/buy",
+            &me,
+            json!({ "kind": "charm", "charm": { "kind": kind, "tier": "bronze" } }),
+        )
+        .await;
+        got.extend(earned(&body));
+    }
+    assert_eq!(got, ["charmed"]);
+
+    // A pot won (drawn while away) shows at the next action
+    let uid = user_id(&name).await;
+    diesel::sql_query("INSERT INTO pots (day, amount, winner_id, drawn_at) VALUES (DATE '1999-01-01' - (random() * 100000)::int, 500, $1, now())")
+        .bind::<diesel::sql_types::BigInt, _>(uid)
+        .execute(&mut conn().await)
+        .await
+        .unwrap();
+    let id = known_ticket(&name, "lucky_three", lose, json!({ "kind": "nothing" })).await;
+    let (_, body) = post(&app, &format!("/api/tickets/{id}/scratch"), &me).await;
+    assert!(earned(&body).contains(&"pot_luck".to_owned()));
+
+    // Collections count what is tried, toward every year-round one
+    let (_, list) = get(&app, "/api/achievements", &me).await;
+    let at = |id: &str| list.as_array().unwrap().iter().find(|a| a["id"] == id).unwrap()["progress"].clone();
+    let all = at("tried_them_all");
+    assert_eq!(all[0], 1, "Lucky Three only");
+    assert!(all[1].as_i64().unwrap() >= 30);
+    let (_, body) = post_json(&app, "/api/shop/buy", &me, json!({ "kind": "bundle", "bundle": "starter" })).await;
+    assert!(body["coins"].as_i64().is_some());
+    let (_, list) = get(&app, "/api/achievements", &me).await;
+    let bundles = list.as_array().unwrap().iter().find(|a| a["id"] == "every_bundle").unwrap()["progress"].clone();
+    assert_eq!(bundles[0], 1);
 }

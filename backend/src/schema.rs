@@ -38,6 +38,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    collected (user_id, kind, key) {
+        user_id -> Int8,
+        kind -> Text,
+        key -> Text,
+    }
+}
+
+diesel::table! {
     cosmetics (user_id, kind, item) {
         user_id -> Int8,
         kind -> Text,
@@ -135,6 +143,11 @@ diesel::table! {
         quests_done -> Int4,
         coins_won -> Int8,
         bundles -> Int4,
+        win_run -> Int4,
+        lose_run -> Int4,
+        best_win_run -> Int4,
+        best_lose_run -> Int4,
+        full_hours -> Int4,
     }
 }
 
@@ -188,6 +201,7 @@ diesel::table! {
 diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(aquarium -> users (user_id));
 diesel::joinable!(charms -> users (user_id));
+diesel::joinable!(collected -> users (user_id));
 diesel::joinable!(cosmetics -> users (user_id));
 diesel::joinable!(quest_slots -> users (user_id));
 diesel::joinable!(quests -> users (user_id));
@@ -203,6 +217,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     announcements,
     aquarium,
     charms,
+    collected,
     cosmetics,
     duels,
     mutes,

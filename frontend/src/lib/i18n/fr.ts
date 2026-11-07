@@ -787,5 +787,36 @@ export default {
 	'charm.days_covered_other': '{n} jours manqués',
 	'charm.days_one': '{n} jour',
 	'charm.days_other': '{n} jours',
-	'lobby.shielded': '🛡️ série gardée'
+	'lobby.shielded': '🛡️ série gardée',
+
+	'achievement.hat_trick': 'Coup du chapeau',
+	'achievement.hat_trick.how': 'Gagner trois tickets de suite',
+	'achievement.night_owl': 'Oiseau de nuit',
+	'achievement.night_owl.how': 'Gratter un ticket entre 2 et 5 heures du matin',
+	'achievement.early_bird': 'Lève-tôt',
+	'achievement.early_bird.how': 'Gratter un ticket entre 5 et 7 heures du matin',
+	'achievement.charmed': 'Sous le charme',
+	'achievement.charmed.how':
+		'Porter à la fois les porte-bonheur des soldes, le Trèfle et le Toucher de Midas',
+	'achievement.hour_master': 'Montre en main',
+	'achievement.hour_master.how': 'Terminer les trois manches de quêtes en une heure',
+	'achievement.pot_luck': 'Gros lot',
+	'achievement.pot_luck.how': 'Remporter la cagnotte du jour',
+	'achievement.unlucky': 'Pas de bol',
+	'achievement.unlucky.how':
+		'Perdre dix tickets de suite (un petit quelque chose pour se consoler)',
+	'achievement.fast_learner': 'Apprenti rapide',
+	'achievement.fast_learner.how': 'Atteindre le niveau 10 dans la semaine de votre inscription',
+	'achievement.generous': 'Généreux',
+	'achievement.generous.how': 'Offrir 10 tickets',
+	'achievement.duelist': 'Duelliste',
+	'achievement.duelist.how': 'Gagner 10 duels',
+	'achievement.clockwork': 'Réglé comme une horloge',
+	'achievement.clockwork.how': 'Terminer toutes les manches de quêtes sur dix heures différentes',
+	'achievement.tried_them_all': 'Touche-à-tout',
+	'achievement.tried_them_all.how': 'Gratter chaque ticket vendu toute l’année',
+	'achievement.every_bundle': 'Collectionneur de lots',
+	'achievement.every_bundle.how': 'Acheter chaque lot vendu toute l’année',
+	'achievement.every_seal': 'Briseur de sceaux',
+	'achievement.every_seal.how': 'Gagner sous chaque sceau des lots de l’année'
 } satisfies Record<keyof typeof en, string>;

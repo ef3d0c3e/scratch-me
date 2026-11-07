@@ -512,6 +512,9 @@ async fn seal_bonus(
     boost: &mut Boost,
 ) -> ApiResult<Vec<TicketDto>> {
     let Some(seal) = seal else { return Ok(vec![]) };
+    if *prize != Prize::Nothing {
+        progress::collect(conn, uid, "seal", seal.key).await?;
+    }
     boost.seal = seal.bonus(prize, series.price().unwrap_or(0));
     if boost.seal > 0 {
         diesel::update(users::table.find(uid)).set(users::coins.eq(users::coins + boost.seal)).execute(conn).await?;
