@@ -79,6 +79,10 @@ pub const GAMES: &[Series] = &[
     Series::Battleship,
     Series::CoinFlip,
     Series::Roulette,
+    Series::Baccarat,
+    Series::HigherLower,
+    Series::GemMine,
+    Series::Keno,
 ];
 
 pub fn handles(series: Series) -> bool {
@@ -102,6 +106,10 @@ pub fn dispatch(
         Series::Battleship => run::<super::battleship::Battleship>(layout, state, mv, now),
         Series::CoinFlip => run::<super::coin_flip::CoinFlip>(layout, state, mv, now),
         Series::Roulette => run::<super::roulette::Roulette>(layout, state, mv, now),
+        Series::Baccarat => run::<super::baccarat::Baccarat>(layout, state, mv, now),
+        Series::HigherLower => run::<super::higher_lower::HigherLower>(layout, state, mv, now),
+        Series::GemMine => run::<super::gem_mine::GemMine>(layout, state, mv, now),
+        Series::Keno => run::<super::keno::Keno>(layout, state, mv, now),
         _ => return None,
     })
 }

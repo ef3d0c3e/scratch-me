@@ -6,7 +6,11 @@
 
 import type { Component } from 'svelte';
 import type { Series } from '#lib/types.ts';
+import BaccaratFace from './BaccaratFace.svelte';
 import BattleshipFace from './BattleshipFace.svelte';
+import GemMineFace from './GemMineFace.svelte';
+import HigherLowerFace from './HigherLowerFace.svelte';
+import KenoFace from './KenoFace.svelte';
 import CoinFlipFace from './CoinFlipFace.svelte';
 import PokerFace from './PokerFace.svelte';
 import RouletteFace from './RouletteFace.svelte';
@@ -60,6 +64,7 @@ export const SCRATCH_FACES: Partial<Record<Series, Face>> = {
 	hot_spot: HotSpotFace,
 	poker_hand: PokerFace,
 	mega_reels: ReelsFace,
+	wild_reels: ReelsFace,
 	platinum_three: LuckyFace,
 	board_walk: BoardWalkFace,
 	fishing: FishingFace,
@@ -80,5 +85,9 @@ export const PLAYED_FACES: Partial<Record<Series, Face>> = {
 	rocket: RocketFace,
 	battleship: BattleshipFace,
 	coin_flip: CoinFlipFace,
-	roulette: RouletteFace
+	roulette: RouletteFace,
+	baccarat: BaccaratFace,
+	higher_lower: HigherLowerFace,
+	gem_mine: GemMineFace,
+	keno: KenoFace
 };

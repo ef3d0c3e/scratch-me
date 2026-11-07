@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cosmetics::Cosmetic;
 
+pub mod baccarat;
 pub mod battleship;
 pub mod bingo;
 pub mod blackjack;
@@ -20,9 +21,12 @@ pub mod coin_flip;
 pub mod derby;
 pub mod duel;
 pub mod fishing;
+pub mod gem_mine;
 pub mod golden;
 pub mod high_card;
+pub mod higher_lower;
 pub mod hot_spot;
+pub mod keno;
 pub mod lucky_dice;
 pub mod lucky_reels;
 pub mod lucky_three;
@@ -83,15 +87,21 @@ pub enum Series {
     PokerHand,
     MegaReels,
     PlatinumThree,
+    Baccarat,
+    HigherLower,
+    GemMine,
+    Keno,
+    WildReels,
 }
 
 impl Series {
-    pub const ALL: [Series; 34] = [
+    pub const ALL: [Series; 39] = [
         Series::LuckyThree,
         Series::TicTacToe,
         Series::BoardWalk,
         Series::CoinFlip,
         Series::LuckyDice,
+        Series::HigherLower,
         Series::HighCard,
         Series::Blackjack,
         Series::LuckyReels,
@@ -104,13 +114,17 @@ impl Series {
         Series::Derby,
         Series::Fishing,
         Series::WordSearch,
+        Series::Keno,
+        Series::Baccarat,
         Series::Bingo,
+        Series::WildReels,
         Series::Rocket,
         Series::Roulette,
         Series::PokerHand,
         Series::Plinko,
         Series::NumberMatch,
         Series::DefuseBomb,
+        Series::GemMine,
         Series::MegaReels,
         Series::MysteryBoxes,
         Series::SafeCracker,
@@ -160,6 +174,11 @@ impl Series {
             Series::PokerHand => "poker_hand",
             Series::MegaReels => "mega_reels",
             Series::PlatinumThree => "platinum_three",
+            Series::Baccarat => "baccarat",
+            Series::HigherLower => "higher_lower",
+            Series::GemMine => "gem_mine",
+            Series::Keno => "keno",
+            Series::WildReels => "wild_reels",
         }
     }
 
@@ -201,6 +220,11 @@ impl Series {
             Series::PokerHand => Some(poker_hand::PRICE),
             Series::MegaReels => Some(lucky_reels::MEGA_PRICE),
             Series::PlatinumThree => Some(lucky_three::PLATINUM_PRICE),
+            Series::Baccarat => Some(baccarat::PRICE),
+            Series::HigherLower => Some(higher_lower::PRICE),
+            Series::GemMine => Some(gem_mine::PRICE),
+            Series::Keno => Some(keno::PRICE),
+            Series::WildReels => Some(lucky_reels::WILD_PRICE),
             Series::TicketChain | Series::Golden | Series::Duel => None,
         }
     }
@@ -269,6 +293,11 @@ impl Series {
             Series::PokerHand => poker_hand::draw(rng),
             Series::MegaReels => lucky_reels::draw_mega(rng),
             Series::PlatinumThree => lucky_three::draw_platinum(rng),
+            Series::Baccarat => baccarat::draw(rng),
+            Series::HigherLower => higher_lower::draw(rng),
+            Series::GemMine => gem_mine::draw(rng),
+            Series::Keno => keno::draw(rng),
+            Series::WildReels => lucky_reels::draw_wild(rng),
         }
     }
 

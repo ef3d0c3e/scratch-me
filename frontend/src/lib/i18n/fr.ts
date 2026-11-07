@@ -708,5 +708,45 @@ export default {
 	'achievement.scratch_10000': 'Légende de la pellicule',
 	'achievement.scratch_10000.how': 'Gratter 10 000 tickets',
 	'achievement.level_50': 'La Maison',
-	'achievement.level_50.how': 'Atteindre le niveau 50'
+	'achievement.level_50.how': 'Atteindre le niveau 50',
+
+	'series.baccarat': 'Baccara',
+	'series.baccarat.rules':
+		'Grattez Joueur, Banque ou Égalité pour placer votre mise, puis les mains sont distribuées',
+	'series.higher_lower': 'Plus ou Moins',
+	'series.higher_lower.rules':
+		'Devinez si la carte suivante est plus haute ou plus basse : chaque bonne réponse fait monter l’échelle',
+	'series.gem_mine': 'Mine de Gemmes',
+	'series.gem_mine.rules':
+		'Chaque gemme fait monter votre gain, une mine fait tout perdre : encaissez quand vous voulez',
+	'series.keno': 'Keno',
+	'series.keno.rules': 'Grattez cinq numéros : huit sont tirés, plus vous en trouvez, plus ça paie',
+	'series.wild_reels': 'Rouleaux Joker',
+	'series.wild_reels.rules':
+		'Trois identiques sur l’une des 5 lignes gagnent : l’étoile joker remplace n’importe quel symbole',
+	'reels.wild': 'Joker',
+	'baccarat.player': 'Joueur',
+	'baccarat.banker': 'Banque',
+	'baccarat.tie': 'Égalité',
+	'baccarat.pick': 'Grattez le côté sur lequel vous misez',
+	'baccarat.called': 'Votre mise est sur {side}…',
+	'baccarat.dealing': 'Distribution…',
+	'baccarat.won': '{side} gagne ! Votre mise aussi',
+	'baccarat.lost': '{side} gagne. Pas cette fois',
+	'hl.higher': 'Plus haut',
+	'hl.lower': 'Plus bas',
+	'hl.cash': 'Encaisser 🪙 {n}',
+	'hl.ask': 'Un {card} : la suivante est-elle plus haute ou plus basse ?',
+	'hl.lost': 'Raté : l’échelle est perdue',
+	'hl.cashed': 'Encaissé : 🪙 {n}',
+	'hl.ladder': 'Échelle',
+	'mine.next': 'gemme suivante : 🪙 {n}',
+	'mine.cash': 'Encaisser 🪙 {n}',
+	'mine.boom': '💥 Une mine ! Tout est perdu',
+	'mine.cashed': 'Encaissé : 🪙 {n}',
+	'keno.left_one': '{n} choix restant',
+	'keno.left_other': '{n} choix restants',
+	'keno.matches_one': '{n} trouvé',
+	'keno.matches_other': '{n} trouvés',
+	'errors.nothing_to_cash': 'Rien à encaisser pour l’instant.'
 } satisfies Record<keyof typeof en, string>;

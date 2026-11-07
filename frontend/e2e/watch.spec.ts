@@ -72,6 +72,25 @@ test('Mega Reels light the lines on four rows', async ({ page }) => {
 	await expect(sheet.getByText('×3 = 25,000')).toBeVisible();
 });
 
+test('Wild Reels: the wild star completes a line', async ({ page }) => {
+	const sheet = await open(
+		page,
+		'wild_reels',
+		{
+			reels: [
+				['cherry', 'bell', 'bar'],
+				['wild', 'lemon', 'bar'],
+				['cherry', 'seven', 'lemon']
+			],
+			lines: [0]
+		},
+		{ kind: 'coins', amount: 40 }
+	);
+	await expect(sheet.locator('[data-lit]')).toHaveCount(3);
+	await expect(sheet.getByRole('img', { name: 'Wild' }).first()).toBeVisible();
+	await expect(sheet.locator('[data-tier]')).toHaveText('+40 coins!');
+});
+
 test('Board Walk walks the token, then pays the squares', async ({ page }) => {
 	const sheet = await open(
 		page,

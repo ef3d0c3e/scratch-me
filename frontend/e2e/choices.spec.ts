@@ -66,3 +66,53 @@ test('Battleship: each cell is a shot, sunk ships show whole', async ({ page }) 
 	// The sunk ship shows; the others stay hidden
 	await expect(sheet.locator('.cell.ship')).toHaveCount(3);
 });
+
+const card = (rank: number) => ({ rank, suit: 'spades' });
+
+test('Baccarat: the scratched side is the bet, then the hands are dealt', async ({ page }) => {
+	const sheet = await open(page, 'baccarat', {
+		bets: [140, 170, 600],
+		player: [card(2), card(3), card(13)],
+		banker: [card(9), card(14)],
+		winner: 'banker'
+	});
+	await scratch(page, sheet.locator('[data-side="banker"]'));
+	await expect(sheet.getByTestId('baccarat-step')).toHaveText('Banker wins! So does your bet', {
+		timeout: 10_000
+	});
+	await expect(sheet.locator('[data-hand="player"] .card')).toHaveCount(3);
+	await expect(sheet.locator('[data-tier]')).toHaveText('+170 coins!');
+});
+
+test('Higher or Lower: right guesses climb the ladder, cashing out pays it', async ({ page }) => {
+	const sheet = await open(page, 'higher_lower', {
+		cards: [card(3), card(9), card(4), card(4), card(5), card(6), card(7), card(8)]
+	});
+	await expect(sheet.getByRole('button', { name: /Cash out/ })).toBeDisabled();
+	await sheet.getByRole('button', { name: /Higher/ }).click();
+	await expect(sheet.getByTestId('hl-state')).toContainText('A 9');
+	await sheet.getByRole('button', { name: /Lower/ }).click();
+	await sheet.getByRole('button', { name: 'Cash out 🪙 78' }).click();
+	await expect(sheet.locator('[data-tier]')).toHaveText('+78 coins!');
+});
+
+test('Gem Mine: gems raise the prize, a mine loses it all', async ({ page }) => {
+	const sheet = await open(page, 'gem_mine', { mines: [0, 1, 2] });
+	await scratch(page, sheet.locator('[data-cell="10"]'));
+	await expect(sheet.locator('[data-cell="10"]')).toHaveAttribute('data-state', 'gem');
+	await expect(sheet.getByRole('button', { name: /Cash out 🪙 195/ })).toBeEnabled();
+	await scratch(page, sheet.locator('[data-cell="1"]'));
+	await expect(sheet.getByTestId('mine-state')).toContainText('A mine!');
+	await expect(sheet.getByText('Not this time', { exact: true })).toBeVisible();
+});
+
+test('Keno: five scratched numbers, paid by their matches', async ({ page }) => {
+	const sheet = await open(page, 'keno', { drawn: [0, 1, 2, 3, 4, 5, 6, 7] });
+	for (const cell of [0, 1, 2, 18, 19]) {
+		await scratch(page, sheet.locator(`[data-cell="${cell}"]`));
+		await expect(sheet.locator(`[data-cell="${cell}"]`)).not.toHaveAttribute('data-state', '');
+	}
+	await expect(sheet.getByTestId('keno-state')).toHaveText('3 matches');
+	await expect(sheet.locator('[data-state="drawn"]')).toHaveCount(5);
+	await expect(sheet.locator('[data-tier]')).toHaveText('+100 coins!');
+});

@@ -35,7 +35,12 @@ export const SERIES_LOOK: Record<Series, { edge: string; ink: string; shadow: st
 	roulette: { edge: '#dc2626', ink: '#991b1b', shadow: '#1b1530' },
 	poker_hand: { edge: '#059669', ink: '#065f46', shadow: '#022c22' },
 	mega_reels: { edge: '#f97316', ink: '#9a3412', shadow: '#3b1300' },
-	platinum_three: { edge: '#a5b4fc', ink: '#4338ca', shadow: '#1e1b4b' }
+	platinum_three: { edge: '#a5b4fc', ink: '#4338ca', shadow: '#1e1b4b' },
+	baccarat: { edge: '#1d4ed8', ink: '#991b1b', shadow: '#1e1b4b' },
+	higher_lower: { edge: '#10b981', ink: '#047857', shadow: '#022c22' },
+	gem_mine: { edge: '#06b6d4', ink: '#155e75', shadow: '#083344' },
+	keno: { edge: '#ea580c', ink: '#9a3412', shadow: '#431407' },
+	wild_reels: { edge: '#a855f7', ink: '#7e22ce', shadow: '#3b0764' }
 };
 
 /** How the foil over each series splits into squares for the reveal rule */
@@ -77,7 +82,13 @@ export const FOIL_GRID: Record<Series, { cols: number; rows: number }> = {
 	roulette: { cols: 1, rows: 1 },
 	poker_hand: { cols: 5, rows: 1 },
 	mega_reels: { cols: 3, rows: 1 },
-	platinum_three: { cols: 3, rows: 3 }
+	platinum_three: { cols: 3, rows: 3 },
+	/** Played by choice: each cell has its own foil, or none at all */
+	baccarat: { cols: 1, rows: 1 },
+	higher_lower: { cols: 1, rows: 1 },
+	gem_mine: { cols: 1, rows: 1 },
+	keno: { cols: 1, rows: 1 },
+	wild_reels: { cols: 3, rows: 1 }
 };
 
 /** Series played move by move, not scratched all at once */
@@ -90,7 +101,11 @@ export const PLAYED: Series[] = [
 	'rocket',
 	'battleship',
 	'coin_flip',
-	'roulette'
+	'roulette',
+	'baccarat',
+	'higher_lower',
+	'gem_mine',
+	'keno'
 ];
 export const isPlayed = (s: Series) => PLAYED.includes(s);
 

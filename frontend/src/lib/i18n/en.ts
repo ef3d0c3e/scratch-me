@@ -695,5 +695,46 @@ export default {
 	'achievement.scratch_10000': 'Legend of the foil',
 	'achievement.scratch_10000.how': 'Scratch 10,000 tickets',
 	'achievement.level_50': 'The House',
-	'achievement.level_50.how': 'Reach level 50'
+	'achievement.level_50.how': 'Reach level 50',
+
+	'series.baccarat': 'Baccarat',
+	'series.baccarat.rules':
+		'Scratch Player, Banker or Tie to place your bet, then the hands are dealt',
+	'series.higher_lower': 'Higher or Lower',
+	'series.higher_lower.rules':
+		'Guess whether the next card is higher or lower: every right guess climbs the ladder',
+	'series.gem_mine': 'Gem Mine',
+	'series.gem_mine.rules':
+		'Every gem raises your prize, a mine loses it all: cash out when you like',
+	'series.keno': 'Keno',
+	'series.keno.rules':
+		'Scratch five numbers as your picks: eight are drawn, the more you match the more it pays',
+	'series.wild_reels': 'Wild Reels',
+	'series.wild_reels.rules':
+		'Three of a kind on any of the 5 lines wins: the wild star stands in for any symbol',
+	'reels.wild': 'Wild',
+	'baccarat.player': 'Player',
+	'baccarat.banker': 'Banker',
+	'baccarat.tie': 'Tie',
+	'baccarat.pick': 'Scratch the side you bet on',
+	'baccarat.called': 'Your bet is on {side}…',
+	'baccarat.dealing': 'Dealing…',
+	'baccarat.won': '{side} wins! So does your bet',
+	'baccarat.lost': '{side} wins. Not this time',
+	'hl.higher': 'Higher',
+	'hl.lower': 'Lower',
+	'hl.cash': 'Cash out 🪙 {n}',
+	'hl.ask': 'A {card}: is the next one higher or lower?',
+	'hl.lost': 'Wrong guess: the ladder is lost',
+	'hl.cashed': 'Cashed out: 🪙 {n}',
+	'hl.ladder': 'Ladder',
+	'mine.next': 'next gem: 🪙 {n}',
+	'mine.cash': 'Cash out 🪙 {n}',
+	'mine.boom': '💥 A mine! Everything is lost',
+	'mine.cashed': 'Cashed out: 🪙 {n}',
+	'keno.left_one': '{n} pick left',
+	'keno.left_other': '{n} picks left',
+	'keno.matches_one': '{n} match',
+	'keno.matches_other': '{n} matches',
+	'errors.nothing_to_cash': 'Nothing to cash out yet.'
 } as const;

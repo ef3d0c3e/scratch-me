@@ -34,7 +34,12 @@ export type Series =
 	| 'roulette'
 	| 'poker_hand'
 	| 'mega_reels'
-	| 'platinum_three';
+	| 'platinum_three'
+	| 'baccarat'
+	| 'higher_lower'
+	| 'gem_mine'
+	| 'keno'
+	| 'wild_reels';
 export type Source =
 	'pocket' | 'envelope' | 'prize' | 'shop' | 'reward' | 'gift' | 'duel' | 'bundle';
 
@@ -405,7 +410,7 @@ export interface HighCardLayout {
 	hands: { card: PlayingCard; coins: number }[];
 }
 
-export type ReelSymbol = 'cherry' | 'lemon' | 'bell' | 'bar' | 'seven';
+export type ReelSymbol = 'cherry' | 'lemon' | 'bell' | 'bar' | 'seven' | 'wild';
 
 export interface ReelsLayout {
 	/** Reel by reel, top to bottom */

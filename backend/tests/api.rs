@@ -1709,3 +1709,50 @@ async fn bundles_issue_sealed_tickets_whose_seal_pays() {
     assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 80 }));
     assert_eq!(body["done"]["seal_bonus"], 80);
 }
+
+#[actix_web::test]
+async fn baccarat_higher_lower_gem_mine_and_keno_play_out() {
+    let Some(state) = state().await else { return };
+    let app = app!(state);
+    let name = unique("games");
+    let me = register(&app, &name, "UTC").await;
+    let nothing = json!({ "kind": "nothing" });
+    let card = |rank: u8| json!({ "rank": rank, "suit": "spades" });
+    let play = async |id: i64, mv: Value| {
+        post_json(&app, &format!("/api/tickets/{id}/play"), &me, json!({ "move": mv })).await
+    };
+
+    // Baccarat: the banker's hand won; a bet on it pays what it hid
+    let layout = json!({ "bets": [140, 170, 600], "player": [card(2), card(3), card(13)], "banker": [card(9), card(14)], "winner": "banker" });
+    let id = known_ticket(&name, "baccarat", layout, nothing.clone()).await;
+    let (_, body) = play(id, json!({ "side": "banker" })).await;
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 170 }));
+    assert_eq!(body["view"]["totals"], json!([5, 0]));
+
+    // Higher or Lower: two right guesses, then cash out
+    let layout = json!({ "cards": [card(3), card(9), card(4), card(4), card(5), card(6), card(7), card(8)] });
+    let id = known_ticket(&name, "higher_lower", layout, nothing.clone()).await;
+    let (_, body) = play(id, json!({ "kind": "guess", "guess": "higher" })).await;
+    assert_eq!((body["view"]["right"].as_i64(), body["view"]["cards"].as_array().unwrap().len()), (Some(1), 2));
+    play(id, json!({ "kind": "guess", "guess": "lower" })).await;
+    let (_, body) = play(id, json!({ "kind": "cash" })).await;
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 78 }));
+
+    // Gem Mine: two gems, then a mine loses it all
+    let id = known_ticket(&name, "gem_mine", json!({ "mines": [0, 1, 2] }), nothing.clone()).await;
+    let (_, body) = play(id, json!({ "kind": "dig", "cell": 10 })).await;
+    assert_eq!((body["view"]["gems"].as_i64(), body["view"]["mines"].is_null()), (Some(1), true));
+    play(id, json!({ "kind": "dig", "cell": 11 })).await;
+    let (_, body) = play(id, json!({ "kind": "dig", "cell": 1 })).await;
+    assert_eq!(body["done"]["prize"], nothing);
+    assert_eq!(body["view"]["mines"], json!([0, 1, 2]), "the mines show at the end");
+
+    // Keno: five picks, three of them drawn
+    let id = known_ticket(&name, "keno", json!({ "drawn": [0, 1, 2, 3, 4, 5, 6, 7] }), nothing.clone()).await;
+    for pick in [0, 1, 2, 18] {
+        play(id, json!({ "pick": pick })).await;
+    }
+    let (_, body) = play(id, json!({ "pick": 19 })).await;
+    assert_eq!(body["done"]["prize"], json!({ "kind": "coins", "amount": 100 }));
+    assert_eq!(body["view"]["matches"], 3);
+}

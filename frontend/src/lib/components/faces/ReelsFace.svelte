@@ -13,6 +13,7 @@
 	}
 	let { layout, revealed, foil, onsettled, series = 'lucky_reels' }: Props = $props();
 	const mega = $derived(series === 'mega_reels');
+	const wild = $derived(series === 'wild_reels');
 	const rows = $derived(mega ? 4 : 3);
 	const i18n = getI18n();
 	$effect(() => {
@@ -51,8 +52,16 @@
 		['lemon', 300],
 		['cherry', 160]
 	];
+	const WILD_PAYS: [ReelSymbol, number][] = [
+		['wild', 10000],
+		['seven', 5000],
+		['bar', 650],
+		['bell', 200],
+		['lemon', 80],
+		['cherry', 40]
+	];
 	const lines = $derived(mega ? MEGA_LINES : LINES);
-	const pays = $derived(mega ? MEGA_PAYS : PAYS);
+	const pays = $derived(mega ? MEGA_PAYS : wild ? WILD_PAYS : PAYS);
 	const lit = (reel: number, row: number) =>
 		revealed && !!layout?.lines.some((l) => lines[l][reel] === row);
 </script>
@@ -100,12 +109,16 @@
 		>
 	{:else if s === 'bar'}
 		<span class="bar" role="img" aria-label="BAR">BAR</span>
+	{:else if s === 'wild'}
+		<span class="wild" role="img" aria-label={i18n.t('reels.wild')}>★<small>WILD</small></span>
 	{:else}
 		<span class="seven" role="img" aria-label="7">7</span>
 	{/if}
 {/snippet}
 
-<p class="rules">{i18n.t(`series.${mega ? 'mega_reels' : 'lucky_reels'}.rules`)}</p>
+<p class="rules">
+	{i18n.t(`series.${mega ? 'mega_reels' : wild ? 'wild_reels' : 'lucky_reels'}.rules`)}
+</p>
 <div class="play machine" class:tall={mega}>
 	<div class="reels" style:--rows={rows}>
 		{#each { length: 3 }, r (r)}
@@ -182,6 +195,24 @@
 		background: #1b1530;
 		padding: 4px 6px;
 		border-radius: 4px;
+	}
+	.wild {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		font: 400 30px/1 var(--display);
+		color: #7c3aed;
+		text-shadow: 0 2px 0 #3b0764;
+	}
+	.wild small {
+		font-size: 10px;
+		letter-spacing: 0.08em;
+	}
+	.mini .wild {
+		font-size: 16px;
+	}
+	.mini .wild small {
+		display: none;
 	}
 	.seven {
 		font: 400 40px/1 var(--display);

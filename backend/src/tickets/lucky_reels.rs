@@ -1,7 +1,8 @@
 //! Lucky Reels: three reels of three symbols, scratched one by one. Five
 //! paylines (three rows, two diagonals); three of a kind on a line pays.
 //! Mega Reels, for the top tier: four rows, eight paylines (four rows and
-//! four diagonals), a richer table.
+//! four diagonals), a richer table. Wild Reels: three rows, and a wild symbol
+//! that stands in for any other on a line (three wilds pay their own prize).
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,8 @@ pub enum Reel {
     Bell,
     Bar,
     Seven,
+    /// Wild Reels only: stands in for any symbol
+    Wild,
 }
 
 /// How often each comes up on a reel, and what three on a line pay
@@ -37,6 +40,17 @@ pub const MEGA_SYMBOLS: [(Reel, u32, i64); 5] = [
     (Reel::Bell, 17, 800),
     (Reel::Bar, 10, 2500),
     (Reel::Seven, 3, 25_000),
+];
+
+/// Wild Reels: a wild now and then, every line paying a little more
+pub const WILD_PRICE: i64 = 100;
+pub const WILD_SYMBOLS: [(Reel, u32, i64); 6] = [
+    (Reel::Cherry, 38, 40),
+    (Reel::Lemon, 28, 80),
+    (Reel::Bell, 16, 200),
+    (Reel::Bar, 9, 650),
+    (Reel::Seven, 3, 5000),
+    (Reel::Wild, 6, 10_000),
 ];
 
 /// Paylines as (row on reel 1, row on reel 2, row on reel 3)
@@ -69,8 +83,14 @@ fn score_on(reels: &[Vec<Reel>], paylines: &[[usize; 3]], table: &[(Reel, u32, i
     let mut lines = vec![];
     let mut total = 0;
     for (i, [a, b, c]) in paylines.iter().enumerate() {
-        let s = reels[0][*a];
-        if reels[1][*b] == s && reels[2][*c] == s {
+        let line = [reels[0][*a], reels[1][*b], reels[2][*c]];
+        // The symbol the line makes: the one its non-wilds share, or wild for three wilds
+        let mut tame = line.iter().copied().filter(|s| *s != Reel::Wild);
+        let made = match tame.next() {
+            None => Some(Reel::Wild),
+            Some(first) => tame.all(|s| s == first).then_some(first),
+        };
+        if let Some(s) = made {
             lines.push(i);
             total += pays_in(table, s);
         }
@@ -80,6 +100,10 @@ fn score_on(reels: &[Vec<Reel>], paylines: &[[usize; 3]], table: &[(Reel, u32, i
 
 pub fn draw(rng: &mut impl Rng) -> Drawn {
     draw_on(3, &LINES, &SYMBOLS, rng)
+}
+
+pub fn draw_wild(rng: &mut impl Rng) -> Drawn {
+    draw_on(3, &LINES, &WILD_SYMBOLS, rng)
 }
 
 pub fn draw_mega(rng: &mut impl Rng) -> Drawn {
@@ -106,6 +130,11 @@ mod tests {
         assert_eq!(score(&reels), (vec![0], 60));
         let all = vec![vec![Bell; 3], vec![Bell; 3], vec![Bell; 3]];
         assert_eq!(score(&all), (vec![0, 1, 2, 3, 4], 1500));
+        // A wild completes any line; three wilds pay their own prize
+        let wild = vec![vec![Cherry, Wild, Bar], vec![Wild, Wild, Bar], vec![Cherry, Wild, Lemon]];
+        let (lines, total) = score_on(&wild, &LINES, &WILD_SYMBOLS);
+        assert_eq!(lines, vec![0, 1], "cherry wild cherry, and three wilds");
+        assert_eq!(total, 40 + 10_000);
         let tall = vec![vec![Bell; 4], vec![Bell; 4], vec![Bell; 4]];
         assert_eq!(score_on(&tall, &MEGA_LINES, &MEGA_SYMBOLS), ((0..8).collect(), 8 * 800));
         let d = draw_mega(&mut rand::rng());
