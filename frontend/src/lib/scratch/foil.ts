@@ -2,10 +2,17 @@
 
 /**
  * The rest of the foil falls off by itself once every square of the grid is
- * at least this much scratched: no symbol is revealed that the player has
- * not mostly uncovered themselves.
+ * seen: at least this much of it scratched...
  */
 export const CELL_REVEAL_AT = 0.6;
+
+/**
+ * ...or enough of its middle, where the symbol sits: a peek at the symbol
+ * tells what it is, so it counts. The middle is the square less this share
+ * of it on each side.
+ */
+export const PEEK_INSET = 0.25;
+export const PEEK_AT = 0.35;
 
 /**
  * What has been scratched, tracked from the strokes themselves on a grid of
@@ -55,13 +62,30 @@ export class Coverage {
 		}
 	}
 
-	/** Share scratched in each square of a `cols`×`rows` grid, row by row */
-	shares(cols = 1, rows = 1): number[] {
+	/** Whether each square of a `cols`×`rows` grid is seen, row by row: mostly
+	 * scratched, or its middle peeked at */
+	seen(cols = 1, rows = 1): boolean[] {
+		const all = this.shares(cols, rows);
+		const middle = this.shares(cols, rows, PEEK_INSET);
+		return all.map((s, k) => s >= CELL_REVEAL_AT || middle[k] >= PEEK_AT);
+	}
+
+	/** Share scratched in each square of a `cols`×`rows` grid, row by row;
+	 * with an inset, of each square's middle only (that share off each side) */
+	shares(cols = 1, rows = 1, inset = 0): number[] {
 		const seen = new Array<number>(cols * rows).fill(0);
 		const gone = new Array<number>(cols * rows).fill(0);
+		/** Where a sample sits within its square, 0 to 1: kept when inside the middle */
+		const within = (n: number, of: number, parts: number) => {
+			const at = ((n + 0.5) * parts) / of;
+			const f = at - Math.floor(at);
+			return f >= inset && f <= 1 - inset;
+		};
 		for (let j = 0; j < this.ny; j++) {
 			const r = Math.min(rows - 1, Math.floor((j * rows) / this.ny));
+			if (inset > 0 && !within(j, this.ny, rows)) continue;
 			for (let i = 0; i < this.nx; i++) {
+				if (inset > 0 && !within(i, this.nx, cols)) continue;
 				const k = r * cols + Math.min(cols - 1, Math.floor((i * cols) / this.nx));
 				seen[k]++;
 				gone[k] += this.gone[j * this.nx + i];
@@ -71,9 +95,8 @@ export class Coverage {
 	}
 }
 
-/** Whether the foil may fall off: every square scratched enough */
-export const ready = (shares: number[]) =>
-	shares.length > 0 && shares.every((s) => s >= CELL_REVEAL_AT);
+/** Whether the foil may fall off: every square seen */
+export const ready = (seen: boolean[]) => seen.length > 0 && seen.every(Boolean);
 
 /** Brush diameter in CSS pixels: a quick swipe scrapes a slightly wider path */
 export function brush(speed: number, [min, max]: [number, number] = [20, 30]): number {

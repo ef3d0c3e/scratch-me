@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Coverage, brush, flakes, ready } from './foil.ts';
+import { CELL_REVEAL_AT, Coverage, PEEK_AT, PEEK_INSET, brush, flakes, ready } from './foil.ts';
 
 /** Horizontal strokes `gap` px apart over the rows from y0 to y1, x0 to x1 */
 function rub(c: Coverage, x0: number, x1: number, y0: number, y1: number, size = 20, gap = 16) {
@@ -48,29 +48,57 @@ describe('ready', () => {
 	it('waits after half of the first square', () => {
 		const c = new Coverage(300, 300);
 		rub(c, 0, 100, 0, 50);
-		expect(ready(c.shares(3, 3))).toBe(false);
+		expect(ready(c.seen(3, 3))).toBe(false);
 	});
 
 	it('waits while a third of the foil is scratched', () => {
 		const c = new Coverage(300, 300);
 		rub(c, 0, 100, 0, 300);
-		expect(ready(c.shares(3, 3))).toBe(false);
+		expect(ready(c.seen(3, 3))).toBe(false);
 	});
 
 	it('waits while one square is still covered, however much the rest is', () => {
 		const c = new Coverage(300, 300);
 		rub(c, 0, 300, 0, 195);
 		rub(c, 0, 195, 200, 300);
-		expect(ready(c.shares(3, 3))).toBe(false);
+		expect(ready(c.seen(3, 3))).toBe(false);
 	});
 
 	it('goes once every square is mostly scratched', () => {
 		const c = new Coverage(300, 300);
 		// Strokes 28 px apart with a 20 px brush: about 70 % of everything
 		rub(c, 0, 300, 10, 300, 20, 28);
-		const shares = c.shares(3, 3);
-		expect(Math.min(...shares)).toBeLessThan(1);
-		expect(ready(shares)).toBe(true);
+		expect(Math.min(...c.shares(3, 3))).toBeLessThan(1);
+		expect(ready(c.seen(3, 3))).toBe(true);
+	});
+});
+
+describe('peeking', () => {
+	it('a scratch across the middle of every square is enough to see them', () => {
+		const c = new Coverage(300, 300);
+		// One stroke through the middle of each row of squares, 40 px wide: a
+		// band across each symbol, far from mostly scratching the squares
+		for (const y of [40, 50, 60, 140, 150, 160, 240, 250, 260]) c.stroke(0, y, 300, y, 20);
+		expect(Math.max(...c.shares(3, 3))).toBeLessThan(CELL_REVEAL_AT);
+		expect(c.seen(3, 3).every(Boolean)).toBe(true);
+		expect(ready(c.seen(3, 3))).toBe(true);
+	});
+
+	it('the edges of a square are not a peek at its symbol', () => {
+		const c = new Coverage(300, 300);
+		// Around the border of the first square only
+		rub(c, 0, 100, 0, 15, 20, 15);
+		rub(c, 0, 100, 85, 100, 20, 15);
+		expect(c.shares(3, 3, PEEK_INSET)[0]).toBeLessThan(PEEK_AT);
+		expect(c.seen(3, 3)[0]).toBe(false);
+	});
+
+	it('the middle counts on its own', () => {
+		const c = new Coverage(100, 100);
+		rub(c, 25, 75, 25, 75, 20, 10);
+		expect(c.shares(1, 1, PEEK_INSET)[0]).toBeGreaterThan(0.8);
+		expect(c.shares()[0]).toBeLessThan(CELL_REVEAL_AT);
+		expect(c.seen()).toEqual([true]);
 	});
 });
 

@@ -49,6 +49,27 @@ test('the foil stays until every square is scratched', async ({ page }) => {
 	await expect(sheet.getByText(OUTCOME)).toBeVisible();
 });
 
+test('a swipe across the middle of each row is enough: the symbols were seen', async ({ page }) => {
+	await newPlayer(page);
+	await page.getByRole('button', { name: 'Take', exact: true }).click();
+	await page.getByRole('button', { name: 'Scratch', exact: true }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.getByRole('button', { name: 'Reveal all' })).toBeEnabled();
+	const box = (await sheet.locator('.play canvas.scratch').boundingBox())!;
+	// Two close swipes through the middle of each row of symbols: a band across
+	// them, a third of each square at most, whatever the brush's speed
+	for (const row of [1 / 6, 3 / 6, 5 / 6]) {
+		for (const dy of [-0.04, 0.04]) {
+			const y = box.y + box.height * (row + dy);
+			await page.mouse.move(box.x + 4, y);
+			await page.mouse.down();
+			await page.mouse.move(box.x + box.width - 4, y, { steps: 8 });
+			await page.mouse.up();
+		}
+	}
+	await expect(sheet.getByText(OUTCOME)).toBeVisible();
+});
+
 test('reveal all shows the prize without scratching', async ({ page }) => {
 	await newPlayer(page);
 	await page.getByRole('button', { name: 'Take', exact: true }).click();

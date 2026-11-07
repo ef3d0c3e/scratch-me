@@ -397,7 +397,7 @@
 
 	function measure() {
 		if (!coverage || fired) return;
-		if (ready(coverage.shares(cols, rows))) {
+		if (ready(coverage.seen(cols, rows))) {
 			fired = true;
 			onreveal();
 		}

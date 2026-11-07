@@ -43,11 +43,13 @@ cargo run -p scratchme-api -- make-admin <username>
 - Lucky Three: a 3×3 grid where three of a kind wins coins, another ticket or a pocket refill
 - Pocket: one free ticket every 20 minutes, worth more as you level, holds 3
 - Daily envelope: one per calendar day, with a 7-day streak cycle
-- Scratch canvas: finger-speed brush, falling foil flakes, the rest falls off once every square is mostly scratched
-- Five ticket series (Lucky Three, Number Match, Ticket Chain, Cash Wheel, Golden Ticket), a shop, themes and scratch tools
+- Scratch canvas: finger-speed brush, falling foil flakes, the rest falls off once every square is seen (mostly scratched, or its symbol peeked at)
+- Over thirty ticket series in three shop tiers (opening at levels 1, 3 and 6), among them games played by choice: Coin Flip, Roulette, Battleship, Treasure Dig, Mystery Boxes…
+- Bundles: several tickets under a seal that multiplies, guarantees or retries the win, from a 200-coin starter to a 6,200-coin vault
+- A shop in five tabs (Bundles, Tier 1–3, Charms & Style), themes, scratch tools and foils
 - Charms: discount, luck (a losing ticket may be drawn again) and payout, in bronze, silver and gold; each lasts a number of uses or a time window, one of each kind at a time, and never makes play profitable
 - Celebrations scaled to the prize, scratch sound and haptics, tilt shimmer
-- Levels, achievements, and daily quests in up to four rounds: finishing three opens three harder ones
+- Levels (each one a Ticket Chain), achievements up to level 50 (The House), and quests by the hour in three rounds: finishing three opens three harder ones
 - Shoutbox and live feed of big wins over a WebSocket, announcements, profiles and titles
 
 ## Metrics
